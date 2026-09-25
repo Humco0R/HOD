@@ -1,0 +1,18 @@
+services:
+  backend:
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/secrets/max-ca-bundle.pem
+    secrets:
+      - source: max-ca-bundle
+        target: max-ca-bundle.pem
+
+  worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/secrets/max-ca-bundle.pem
+    secrets:
+      - source: max-ca-bundle
+        target: max-ca-bundle.pem
+
+secrets:
+  max-ca-bundle:
+    file: ${MAX_CA_BUNDLE_PATH:-./serifo/max-ca-bundle.pem}

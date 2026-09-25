@@ -1,0 +1,44 @@
+{
+  "name": "@hod/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "tsx src/infrastructure/db/migrate.ts",
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "eval:ai": "node ../../scripts/run-gigachat-task.mjs eval",
+    "eval:validate": "tsx src/integrations/ai/evals/validate-golden.ts",
+    "test:gigachat": "node ../../scripts/run-gigachat-task.mjs smoke",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
+    "test": "vitest run --config vitest.config.ts --passWithNoTests",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/cors": "11.3.0",
+    "@fastify/helmet": "13.1.1",
+    "@fastify/multipart": "10.1.1",
+    "@fastify/sensible": "6.0.5",
+    "@hod/config": "0.1.0",
+    "@hod/contracts": "0.1.0",
+    "@maxhub/max-bot-api": "0.3.1",
+    "bullmq": "6.3.8",
+    "drizzle-orm": "1.0.0-rc.4",
+    "fastify": "5.12.5",
+    "gigachat": "0.0.20",
+    "ioredis": "6.0.0",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {
+    "@types/pg": "8.16.0",
+    "drizzle-kit": "1.0.0-rc.4",
+    "tsx": "4.20.5"
+  }
+}

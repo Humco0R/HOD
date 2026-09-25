@@ -1,0 +1,11 @@
+services:
+  worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /run/secrets/gigachat-ca-bundle.pem
+    secrets:
+      - source: gigachat-ca-bundle
+        target: gigachat-ca-bundle.pem
+
+secrets:
+  gigachat-ca-bundle:
+    file: ${GIGACHAT_CA_BUNDLE_PATH:-./serifo/gigachat-ca-bundle.pem}

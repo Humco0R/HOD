@@ -1,0 +1,29 @@
+{
+  "project": "ХОД",
+  "version": "0.2",
+  "date": "2026-09-20",
+  "status": "specification before Codex implementation",
+  "next_product_stage": "12 competitive analysis",
+  "files": [
+    "01_MAX_TECH_FEASIBILITY.md",
+    "02_PRODUCT_FRAMEWORK.md",
+    "03_TARGET_AUDIENCE.md",
+    "04_JTBD_AND_PROBLEM.md",
+    "05_AS_IS_TO_BE.md",
+    "06_KILLER_SCENARIO.md",
+    "07_UX_FLOW.md",
+    "08_MVP_SCOPE.md",
+    "09_DATA_MODEL.md",
+    "10_AI_PIPELINE.md",
+    "11_1_TECHNICAL_BLUEPRINT.md",
+    "11_ARCHITECTURE.md",
+    "AGENTS.md",
+    "ARCHITECTURE_RULES.md",
+    "CODEX_ACCEPTANCE_CHECKLIST.md",
+    "CODEX_START_HERE.md",
+    "DECISIONS.md",
+    "IMPLEMENTATION_PLAN.md",
+    "README.md",
+    "SOURCES.md"
+  ]
+}

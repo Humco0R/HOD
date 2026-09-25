@@ -1,0 +1,1 @@
+ALTER TABLE "chats" ALTER COLUMN "max_chat_id" DROP NOT NULL;

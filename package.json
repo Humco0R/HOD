@@ -1,0 +1,52 @@
+{
+  "name": "hod",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ХОД — conversation-to-action MVP for MAX",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @hod/contracts && npm run build -w @hod/config && npm run build -w @hod/backend && npm run build -w @hod/miniapp",
+    "dev:backend": "npm run dev -w @hod/backend",
+    "dev:worker": "npm run dev:worker -w @hod/backend",
+    "eval:ai": "npm run eval:ai -w @hod/backend",
+    "eval:validate": "npm run eval:validate -w @hod/backend",
+    "dev:miniapp": "npm run dev -w @hod/miniapp",
+    "db:generate": "npm run db:generate -w @hod/backend",
+    "db:migrate": "npm run db:migrate -w @hod/backend",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings=0",
+    "test": "npm run build -w @hod/contracts && npm run build -w @hod/config && npm run test --workspaces --if-present",
+    "test:integration": "npm run build -w @hod/contracts && npm run build -w @hod/config && npm run test:integration -w @hod/backend",
+    "test:gigachat": "npm run test:gigachat -w @hod/backend",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify": "npm run typecheck && npm run test && npm run lint && npm run format:check && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.3.0",
+    "eslint": "10.11.0",
+    "eslint-import-resolver-node": "0.4.0",
+    "eslint-plugin-import-x": "4.17.1",
+    "globals": "17.4.0",
+    "prettier": "3.6.2",
+    "drizzle-orm": "1.0.0-rc.4",
+    "tsup": "8.5.0",
+    "typescript": "5.9.2",
+    "typescript-eslint": "8.70.0",
+    "vitest": "4.1.11"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "msgpackr-extract@3.0.4": true,
+    "unrs-resolver@1.12.2": true
+  }
+}
