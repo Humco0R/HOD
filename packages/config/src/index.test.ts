@@ -64,6 +64,28 @@ describe('runtimeConfigSchema', () => {
     ).toThrow();
   });
 
+  it('allows Mini App development authentication only in development', () => {
+    expect(
+      runtimeConfigSchema.parse({
+        ...required,
+        NODE_ENV: 'development',
+        MINIAPP_DEV_AUTH: 'true',
+        MINIAPP_DEV_EXTERNAL_USER_ID: '900000001',
+      }),
+    ).toMatchObject({
+      MINIAPP_DEV_AUTH: true,
+      MINIAPP_DEV_EXTERNAL_USER_ID: '900000001',
+    });
+
+    expect(() =>
+      runtimeConfigSchema.parse({
+        ...required,
+        NODE_ENV: 'production',
+        MINIAPP_DEV_AUTH: 'true',
+      }),
+    ).toThrow('MINIAPP_DEV_AUTH');
+  });
+
   it('forbids fake AI in production', () => {
     expect(() =>
       runtimeConfigSchema.parse({ ...required, NODE_ENV: 'production', AI_PROVIDER: 'fake' }),

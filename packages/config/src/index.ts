@@ -26,6 +26,11 @@ const maxWebhookSecretSchema = z.string().regex(/^[A-Za-z0-9_-]{5,256}$/, {
   message: 'Must contain 5-256 characters: A-Z, a-z, 0-9, underscore or hyphen',
 });
 const optionalUrl = z.preprocess((value) => (value === '' ? undefined : value), z.url().optional());
+const booleanFromEnvironment = z.preprocess((value) => {
+  if (value === undefined || value === '' || value === false || value === 'false') return false;
+  if (value === true || value === 'true') return true;
+  return value;
+}, z.boolean());
 
 export const runtimeConfigSchema = z
   .object({
@@ -66,6 +71,8 @@ export const runtimeConfigSchema = z
     AI_MEDIUM_CONFIDENCE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.6),
     MINIAPP_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(28_800),
     MAX_INIT_DATA_MAX_AGE_SECONDS: z.coerce.number().int().positive().default(300),
+    MINIAPP_DEV_AUTH: booleanFromEnvironment,
+    MINIAPP_DEV_EXTERNAL_USER_ID: optionalSecret,
     REMINDER_LEAD_MINUTES: z.coerce.number().int().nonnegative().default(60),
     REMINDER_SCAN_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
     OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1_000),
@@ -125,6 +132,25 @@ export const runtimeConfigSchema = z
         code: 'custom',
         path: ['MAX_TRANSPORT'],
         message: 'Polling is only allowed in development',
+      });
+    }
+
+    if (config.MINIAPP_DEV_AUTH && config.NODE_ENV !== 'development') {
+      context.addIssue({
+        code: 'custom',
+        path: ['MINIAPP_DEV_AUTH'],
+        message: 'Mini App development authentication is only allowed in development',
+      });
+    }
+
+    if (
+      config.MINIAPP_DEV_EXTERNAL_USER_ID &&
+      !/^\d{1,20}$/.test(config.MINIAPP_DEV_EXTERNAL_USER_ID)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['MINIAPP_DEV_EXTERNAL_USER_ID'],
+        message: 'Must contain only digits',
       });
     }
 

@@ -1,6 +1,8 @@
 import type {
   ActionDetail,
   ActionSummary,
+  CreateActionRequestDto,
+  CreateActionResponseDto,
   CurrentUser,
   DetectionDetail,
   DetectionEdit,
@@ -59,12 +61,23 @@ export async function ensureSession(): Promise<CurrentUser> {
     if (!(error instanceof ApiError) || error.status !== 401) throw error;
   }
   const initData = maxInitData();
-  if (!initData) throw new Error('Откройте ХОД из MAX, чтобы подтвердить личность.');
+  if (!initData) {
+    try {
+      return await request<CurrentUser>('/api/auth/dev', { method: 'POST', ...json({}) });
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      throw new Error('Откройте ХОД из MAX, чтобы подтвердить личность.', { cause: error });
+    }
+  }
   return request<CurrentUser>('/api/auth/max', { method: 'POST', ...json({ initData }) });
 }
 
 export async function listActions(view: 'assigned' | 'created' | 'team') {
   return request<{ actions: ActionSummary[] }>(`/api/actions?view=${view}`);
+}
+
+export async function createAction(body: CreateActionRequestDto) {
+  return request<CreateActionResponseDto>('/api/actions', { method: 'POST', ...json(body) });
 }
 
 export async function getAction(id: string) {

@@ -235,12 +235,14 @@ export class HandlePersonalCreateUseCase implements InboundChatEventHandler {
       workspaceId: personal.workspaceId,
       chatId: personal.chatId,
       actorUserId: personal.userId,
+      assigneeUserId: personal.userId,
       title: session.title,
       description: session.description,
       deadlineKind: session.deadlineKind,
       deadlineDate: session.deadlineDate,
       deadlineAt: session.deadlineAt ? new Date(session.deadlineAt) : null,
       deadlineRaw: session.deadlineRaw,
+      source: 'PERSONAL_BOT',
     });
     await this.notifications.publish(
       {

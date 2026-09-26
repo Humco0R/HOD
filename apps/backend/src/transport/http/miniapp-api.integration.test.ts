@@ -41,13 +41,15 @@ beforeAll(async () => {
   await migrate(database, { migrationsFolder: resolve(process.cwd(), 'drizzle') });
   await connectRedis(redis);
   const config = runtimeConfigSchema.parse({
-    NODE_ENV: 'test',
+    NODE_ENV: 'development',
     LOG_LEVEL: 'silent',
     DATABASE_URL: databaseUrl,
     REDIS_URL: redisUrl,
     WORKSPACE_DEFAULT_TIMEZONE: 'Asia/Krasnoyarsk',
     MINIAPP_ORIGIN: 'https://miniapp.example.test',
     MAX_BOT_TOKEN: botToken,
+    MINIAPP_DEV_AUTH: true,
+    MINIAPP_DEV_EXTERNAL_USER_ID: '602',
     PROOF_STORAGE_PATH: proofPath,
     PROOF_MAX_BYTES: 1_024,
   });
@@ -75,6 +77,82 @@ afterAll(async () => {
 });
 
 describe('Mini App API', () => {
+  it('creates a local session without MAX init data in explicit development mode', async () => {
+    await seedScenario();
+
+    const response = await app.inject({ method: 'POST', url: '/api/auth/dev' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      firstName: 'Assignee',
+      externalUserId: '602',
+    });
+    expect(response.headers['set-cookie']).toContain('hod_session=');
+  });
+
+  it('creates a personal action and keeps self-assigned actions out of the created view', async () => {
+    await seedScenario();
+    const cookie = await authenticate(602);
+    const actionId = randomUUID();
+    const deadline = new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/actions',
+      headers: { cookie, origin: 'https://miniapp.example.test' },
+      payload: {
+        title: 'Personal Mini App action',
+        description: 'Created without the bot',
+        deadlineKind: 'DATE_ONLY',
+        deadlineDate: deadline,
+        deadlineAt: null,
+        idempotencyKey: actionId,
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toEqual({ id: actionId, created: true });
+
+    const assigned = await app.inject({
+      method: 'GET',
+      url: '/api/actions?view=assigned',
+      headers: { cookie },
+    });
+    expect(
+      assigned.json<{ actions: Array<{ id: string }> }>().actions.map(({ id }) => id),
+    ).toContain(actionId);
+
+    const issued = await app.inject({
+      method: 'GET',
+      url: '/api/actions?view=created',
+      headers: { cookie },
+    });
+    expect(
+      issued.json<{ actions: Array<{ id: string }> }>().actions.map(({ id }) => id),
+    ).not.toContain(actionId);
+  });
+
+  it('rejects an attempt to choose another assignee in the personal creation endpoint', async () => {
+    const seed = await seedScenario();
+    const creatorCookie = await authenticate(601);
+    const actionId = randomUUID();
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/actions',
+      headers: { cookie: creatorCookie, origin: 'https://miniapp.example.test' },
+      payload: {
+        title: 'Issued from Mini App',
+        description: null,
+        assigneeId: seed.assigneeId,
+        deadlineKind: 'UNKNOWN',
+        deadlineDate: null,
+        deadlineAt: null,
+        idempotencyKey: actionId,
+      },
+    });
+    expect(created.statusCode).toBe(400);
+  });
+
   it('validates MAX identity, isolates workspaces and completes the proof lifecycle', async () => {
     const seed = await seedScenario();
 

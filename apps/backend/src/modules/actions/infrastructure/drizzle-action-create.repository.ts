@@ -1,7 +1,14 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import type { Database } from '../../../infrastructure/db/client';
-import { actions, actionEvents, chats, workspaceMembers } from '../../../infrastructure/db/schema';
+import {
+  actions,
+  actionEvents,
+  chats,
+  users,
+  workspaceMembers,
+} from '../../../infrastructure/db/schema';
+import { enqueueOutboxEvent } from '../../notifications';
 import type { ActionCreatePort, CreateActionInput } from '../application/action-create.port';
 
 export class DrizzleActionCreateRepository implements ActionCreatePort {
@@ -18,22 +25,34 @@ export class DrizzleActionCreateRepository implements ActionCreatePort {
 
   create(input: CreateActionInput): Promise<{ actionId: string; created: boolean }> {
     return this.database.transaction(async (transaction) => {
-      const membership = await transaction
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .innerJoin(chats, eq(chats.workspaceId, workspaceMembers.workspaceId))
+      const [chat] = await transaction
+        .select({ id: chats.id })
+        .from(chats)
         .where(
           and(
-            eq(workspaceMembers.workspaceId, input.workspaceId),
-            eq(workspaceMembers.userId, input.actorUserId),
-            eq(workspaceMembers.status, 'ACTIVE'),
             eq(chats.id, input.chatId),
-            eq(chats.context, 'DIALOG'),
+            eq(chats.workspaceId, input.workspaceId),
             eq(chats.status, 'ACTIVE'),
           ),
         )
         .limit(1);
-      if (!membership[0]) throw new Error('Personal workspace is unavailable');
+      const participantIds = [...new Set([input.actorUserId, input.assigneeUserId])];
+      const memberships = await transaction
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, input.workspaceId),
+            inArray(workspaceMembers.userId, participantIds),
+            eq(workspaceMembers.status, 'ACTIVE'),
+          ),
+        );
+      if (
+        !chat ||
+        new Set(memberships.map(({ userId }) => userId)).size !== participantIds.length
+      ) {
+        throw new Error('Action workspace is unavailable');
+      }
 
       const inserted = await transaction
         .insert(actions)
@@ -41,7 +60,7 @@ export class DrizzleActionCreateRepository implements ActionCreatePort {
           id: input.id,
           workspaceId: input.workspaceId,
           creatorId: input.actorUserId,
-          assigneeId: input.actorUserId,
+          assigneeId: input.assigneeUserId,
           title: input.title,
           description: input.description,
           status: 'NEW',
@@ -65,8 +84,25 @@ export class DrizzleActionCreateRepository implements ActionCreatePort {
           fromStatus: null,
           toStatus: 'NEW',
           idempotencyKey: `manual-create:${input.id}`,
-          metadata: { source: 'PERSONAL_BOT' },
+          metadata: { source: input.source },
         });
+        if (input.assigneeUserId !== input.actorUserId) {
+          const [assignee] = await transaction
+            .select({ externalUserId: users.maxUserId })
+            .from(users)
+            .where(eq(users.id, input.assigneeUserId))
+            .limit(1);
+          if (!assignee) throw new Error('Action assignee not found');
+          await enqueueOutboxEvent(transaction, {
+            topic: 'ASSIGNMENT_NOTIFICATION_REQUESTED',
+            dedupeKey: `assignment-${inserted[0].id}`,
+            payload: {
+              actionId: inserted[0].id,
+              assigneeExternalUserId: assignee.externalUserId.toString(),
+              title: input.title,
+            },
+          });
+        }
         return { actionId: inserted[0].id, created: true };
       }
 
