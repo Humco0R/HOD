@@ -3,6 +3,14 @@ set -euo pipefail
 
 revision="${1:?Pass the commit SHA to deploy}"
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA' >&2; exit 1; }
+image_archive="${2:?Pass the image archive path to deploy}"
+expected_archive="/tmp/hod-images-${revision}.tar.gz"
+[[ "$image_archive" == "$expected_archive" ]] || {
+  echo 'Invalid image archive path' >&2
+  exit 1
+}
+test -s "$image_archive" || { echo 'Missing Docker image archive' >&2; exit 1; }
+trap 'rm -f -- "$image_archive"' EXIT
 
 cd /opt/HOD
 test -f .env || { echo 'Missing /opt/HOD/.env' >&2; exit 1; }
@@ -19,8 +27,9 @@ if [[ "$revision" != "$latest" ]]; then
 fi
 
 git checkout --detach "$revision"
+docker load --input "$image_archive"
 docker compose config --quiet
-if ! docker compose --parallel 1 up -d --build; then
+if ! docker compose --parallel 1 up -d --no-build; then
   docker compose ps --all
   docker compose logs --tail=100 migrate backend worker nginx
   exit 1
