@@ -20,7 +20,7 @@ fi
 
 git checkout --detach "$revision"
 docker compose config --quiet
-if ! docker compose up -d --build; then
+if ! docker compose --parallel 1 up -d --build; then
   docker compose ps --all
   docker compose logs --tail=100 migrate backend worker nginx
   exit 1
