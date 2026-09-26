@@ -36,14 +36,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Build Docker images on GitHub
-        run: docker compose --parallel 1 build migrate backend worker miniapp
-      - name: Package Docker images
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker save hod-migrate:latest hod-backend:latest hod-worker:latest hod-miniapp:latest \
-            | gzip -1 > "$RUNNER_TEMP/hod-images.tar.gz"
       - name: Deploy over SSH
         shell: bash
         env:
@@ -63,10 +55,6 @@ jobs:
           mkdir -p "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$HOME/.ssh/known_hosts"
-          archive="/tmp/hod-images-${GITHUB_SHA}.tar.gz"
-          scp -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
-            "$RUNNER_TEMP/hod-images.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:$archive"
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
-            "$DEPLOY_USER@$DEPLOY_HOST" 'bash -se' -- "$GITHUB_SHA" "$archive" < scripts/deploy.sh
+            "$DEPLOY_USER@$DEPLOY_HOST" 'bash -se' -- "$GITHUB_SHA" < scripts/deploy.sh
