@@ -27,6 +27,8 @@ if [[ "$revision" != "$latest" ]]; then
 fi
 
 git checkout --detach "$revision"
+docker image prune --all --force
+docker builder prune --all --force
 docker load --input "$image_archive"
 docker compose config --quiet
 if ! docker compose --parallel 1 up -d --no-build; then
