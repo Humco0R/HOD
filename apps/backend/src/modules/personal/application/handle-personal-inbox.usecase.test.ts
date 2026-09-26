@@ -39,7 +39,7 @@ describe('HandlePersonalInboxUseCase', () => {
     expect(welcome?.[0].buttons).toEqual([
       { text: '➕ Создать дело', payload: 'hod:personal:create', row: 0 },
       { text: '📋 Мои дела', payload: 'hod:personal:actions', row: 1 },
-      { text: '❓ Как это работает', payload: 'hod:personal:help', row: 2 },
+      { text: '❓ Как это работает?', payload: 'hod:personal:help', row: 2 },
     ]);
     expect(welcome?.[1]).toBe(
       `personal-welcome-${createHash('sha256').update('bot_started:1:900:42').digest('hex')}`,

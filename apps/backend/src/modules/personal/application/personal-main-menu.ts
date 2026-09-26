@@ -13,7 +13,7 @@ export function personalMainMenu(externalUserId: string): OutboundNotification {
     buttons: [
       { text: '➕ Создать дело', payload: 'hod:personal:create', row: 0 },
       { text: '📋 Мои дела', payload: 'hod:personal:actions', row: 1 },
-      { text: '❓ Как это работает', payload: 'hod:personal:help', row: 2 },
+      { text: '❓ Как это работает?', payload: 'hod:personal:help', row: 2 },
     ],
   };
 }
