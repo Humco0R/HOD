@@ -18,6 +18,8 @@
     "eval:ai": "npm run eval:ai -w @hod/backend",
     "eval:validate": "npm run eval:validate -w @hod/backend",
     "dev:miniapp": "npm run dev -w @hod/miniapp",
+    "dev:local": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build",
+    "dev:local:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down",
     "db:generate": "npm run db:generate -w @hod/backend",
     "db:migrate": "npm run db:migrate -w @hod/backend",
     "format": "prettier --write .",

@@ -40,6 +40,22 @@ export class MiniAppSessionService {
     return { token, session };
   }
 
+  async findActiveExternalUserId(preferredExternalUserId?: string): Promise<string | null> {
+    const condition = preferredExternalUserId
+      ? and(
+          eq(users.maxUserId, BigInt(preferredExternalUserId)),
+          eq(workspaceMembers.status, 'ACTIVE'),
+        )
+      : eq(workspaceMembers.status, 'ACTIVE');
+    const rows = await this.database
+      .select({ externalUserId: users.maxUserId })
+      .from(users)
+      .innerJoin(workspaceMembers, eq(workspaceMembers.userId, users.id))
+      .where(condition)
+      .limit(1);
+    return rows[0]?.externalUserId.toString() ?? null;
+  }
+
   async get(token: string | undefined): Promise<MiniAppSession | null> {
     if (!token || token.length > 128) return null;
     const raw = await this.redis.get(sessionKey(token));

@@ -1,10 +1,13 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { RuntimeConfig } from '@hod/config';
 import {
   actionDetailSchema,
   actionListResponseSchema,
+  createActionRequestSchema,
+  createActionResponseSchema,
   currentUserSchema,
   detectionDetailSchema,
   detectionEditSchema,
@@ -14,8 +17,10 @@ import {
 import type { Database } from '../../infrastructure/db/client';
 import type { ApplicationQueues } from '../../infrastructure/queue/queues';
 import type { RedisConnection } from '../../infrastructure/redis/redis';
+import { users } from '../../infrastructure/db/schema';
 import {
   DrizzleActionContextStore,
+  DrizzleActionCreateRepository,
   DrizzleActionLifecycleStore,
   DrizzleActionReadRepository,
   QueueActionLifecycleNotifications,
@@ -30,6 +35,7 @@ import {
   validateMaxInitData,
 } from '../../modules/auth';
 import { BullMqNotificationPublisher } from '../../modules/notifications';
+import { DrizzlePersonalWorkspaceStore } from '../../modules/personal';
 import {
   BullMqDetectionMessaging,
   DrizzleDetectionManagementStore,
@@ -62,7 +68,9 @@ export function registerMiniAppApi(
 ): void {
   const { config, database, redis, queues } = dependencies;
   const sessions = new MiniAppSessionService(database, redis, config.MINIAPP_SESSION_TTL_SECONDS);
+  const personalWorkspaces = new DrizzlePersonalWorkspaceStore(database);
   const reads = new DrizzleActionReadRepository(database);
+  const actionCreator = new DrizzleActionCreateRepository(database);
   const contexts = new DrizzleActionContextStore(database);
   const transitions = new TransitionActionWithNotificationUseCase(
     new TransitionActionUseCase(new DrizzleActionLifecycleStore(database)),
@@ -83,6 +91,16 @@ export function registerMiniAppApi(
     return session;
   };
 
+  const setSessionCookie = (reply: FastifyReply, token: string): void => {
+    reply.setCookie(SESSION_COOKIE, token, {
+      path: '/api',
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.NODE_ENV === 'production',
+      maxAge: config.MINIAPP_SESSION_TTL_SECONDS,
+    });
+  };
+
   app.post('/api/auth/max', async (request, reply) => {
     if (!config.MAX_BOT_TOKEN) {
       throw app.httpErrors.serviceUnavailable('MAX authentication is not configured');
@@ -94,13 +112,7 @@ export function registerMiniAppApi(
         maxAgeSeconds: config.MAX_INIT_DATA_MAX_AGE_SECONDS,
       });
       const result = await sessions.create(identity);
-      reply.setCookie(SESSION_COOKIE, result.token, {
-        path: '/api',
-        httpOnly: true,
-        sameSite: 'strict',
-        secure: config.NODE_ENV === 'production',
-        maxAge: config.MINIAPP_SESSION_TTL_SECONDS,
-      });
+      setSessionCookie(reply, result.token);
       return currentUserSchema.parse(
         await reads.getCurrentUser(result.session.userId, result.session.externalUserId),
       );
@@ -113,6 +125,41 @@ export function registerMiniAppApi(
       }
       throw error;
     }
+  });
+
+  app.post('/api/auth/dev', async (_request, reply) => {
+    if (config.NODE_ENV !== 'development' || !config.MINIAPP_DEV_AUTH) {
+      throw app.httpErrors.notFound('Development authentication is disabled');
+    }
+
+    const preferredExternalUserId = config.MINIAPP_DEV_EXTERNAL_USER_ID;
+    let externalUserId = await sessions.findActiveExternalUserId(preferredExternalUserId);
+    if (!externalUserId) {
+      externalUserId = preferredExternalUserId ?? '900000001';
+      await personalWorkspaces.bootstrap({
+        externalDialogId: null,
+        user: {
+          externalUserId,
+          firstName: 'Локальный пользователь',
+          lastName: null,
+          username: 'local_hod',
+        },
+        timezone: config.WORKSPACE_DEFAULT_TIMEZONE,
+      });
+    }
+
+    const result = await sessions.create({
+      externalUserId,
+      firstName: 'Локальный пользователь',
+      lastName: null,
+      username: 'local_hod',
+      authDate: Math.floor(Date.now() / 1_000),
+      queryId: 'development',
+    });
+    setSessionCookie(reply, result.token);
+    return currentUserSchema.parse(
+      await reads.getCurrentUser(result.session.userId, result.session.externalUserId),
+    );
   });
 
   app.delete('/api/auth/session', async (request, reply) => {
@@ -128,11 +175,77 @@ export function registerMiniAppApi(
     );
   });
 
+  app.post('/api/actions', async (request) => {
+    const session = await requireSession(request);
+    assertMutationOrigin(request, config, app);
+    const body = createActionRequestSchema.parse(request.body);
+    const ensurePersonalActionContext = async () => {
+      let personal = await personalWorkspaces.findByExternalUserId(session.externalUserId);
+      if (!personal) {
+        const currentUser = await reads.getCurrentUser(session.userId, session.externalUserId);
+        const [profile] = await database
+          .select({ username: users.username })
+          .from(users)
+          .where(eq(users.id, session.userId))
+          .limit(1);
+        personal = await personalWorkspaces.bootstrap({
+          externalDialogId: null,
+          user: {
+            externalUserId: session.externalUserId,
+            firstName: currentUser.firstName,
+            lastName: currentUser.lastName,
+            username: profile?.username ?? null,
+          },
+          timezone: config.WORKSPACE_DEFAULT_TIMEZONE,
+        });
+      }
+      if (personal.userId !== session.userId) {
+        throw app.httpErrors.forbidden('Personal workspace identity mismatch');
+      }
+      return personal;
+    };
+    const target = await ensurePersonalActionContext();
+    const now = new Date();
+    if (
+      body.deadlineKind === 'DATE_ONLY' &&
+      body.deadlineDate! < formatDateInTimeZone(now, target.timezone)
+    ) {
+      throw app.httpErrors.badRequest('Deadline cannot be in the past');
+    }
+    if (body.deadlineKind === 'EXACT_DATETIME' && new Date(body.deadlineAt!) < now) {
+      throw app.httpErrors.badRequest('Deadline cannot be in the past');
+    }
+    const result = await actionCreator.create({
+      id: body.idempotencyKey,
+      workspaceId: target.workspaceId,
+      chatId: target.chatId,
+      actorUserId: session.userId,
+      assigneeUserId: session.userId,
+      title: body.title,
+      description: body.description,
+      deadlineKind: body.deadlineKind,
+      deadlineDate: body.deadlineKind === 'DATE_ONLY' ? body.deadlineDate : null,
+      deadlineAt: body.deadlineKind === 'EXACT_DATETIME' ? new Date(body.deadlineAt!) : null,
+      deadlineRaw:
+        body.deadlineKind === 'DATE_ONLY'
+          ? body.deadlineDate
+          : body.deadlineKind === 'EXACT_DATETIME'
+            ? body.deadlineAt
+            : null,
+      source: 'MINIAPP',
+    });
+    return createActionResponseSchema.parse({ id: result.actionId, created: result.created });
+  });
+
   app.get('/api/actions', async (request) => {
     const session = await requireSession(request);
     const query = listQuerySchema.parse(request.query);
+    const listed = await reads.list(session.userId, query.view, new Date());
     return actionListResponseSchema.parse({
-      actions: await reads.list(session.userId, query.view, new Date()),
+      actions:
+        query.view === 'created'
+          ? listed.filter((action) => action.assignee.id !== session.userId)
+          : listed,
     });
   });
 
@@ -306,4 +419,21 @@ function sanitizeFilename(value: string): string {
 
 function replyCreated(id: string): { id: string } {
   return { id };
+}
+
+function formatDateInTimeZone(value: Date, timeZone: string): string {
+  const parts = new Map(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      calendar: 'gregory',
+      numberingSystem: 'latn',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(value)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.get('year')!}-${parts.get('month')!}-${parts.get('day')!}`;
 }

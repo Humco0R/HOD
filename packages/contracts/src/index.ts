@@ -97,6 +97,28 @@ export const transitionActionRequestSchema = z.object({
   reason: z.string().max(2_000).optional(),
   idempotencyKey: z.string().min(1).max(200),
 });
+export const createActionRequestSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(2_000).nullable(),
+    deadlineKind: z.enum(['UNKNOWN', 'DATE_ONLY', 'EXACT_DATETIME']),
+    deadlineDate: z.iso.date().nullable(),
+    deadlineAt: z.iso.datetime().nullable(),
+    idempotencyKey: z.uuid(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.deadlineKind === 'DATE_ONLY' && !value.deadlineDate) {
+      context.addIssue({ code: 'custom', path: ['deadlineDate'], message: 'Required' });
+    }
+    if (value.deadlineKind === 'EXACT_DATETIME' && !value.deadlineAt) {
+      context.addIssue({ code: 'custom', path: ['deadlineAt'], message: 'Required' });
+    }
+  });
+export const createActionResponseSchema = z.object({
+  id: z.uuid(),
+  created: z.boolean(),
+});
 export const currentUserSchema = z.object({
   id: z.uuid(),
   firstName: z.string(),
@@ -146,6 +168,8 @@ export const detectionDetailSchema = z.object({
 export type ActionSummary = z.infer<typeof actionSummarySchema>;
 export type ActionDetail = z.infer<typeof actionDetailSchema>;
 export type TransitionActionRequestDto = z.infer<typeof transitionActionRequestSchema>;
+export type CreateActionRequestDto = z.infer<typeof createActionRequestSchema>;
+export type CreateActionResponseDto = z.infer<typeof createActionResponseSchema>;
 export type CurrentUser = z.infer<typeof currentUserSchema>;
 export type DetectionEdit = z.infer<typeof detectionEditSchema>;
 export type DetectionDetail = z.infer<typeof detectionDetailSchema>;

@@ -52,12 +52,14 @@ describe('HandlePersonalCreateUseCase', () => {
       workspaceId: 'workspace-42',
       chatId: 'chat-42',
       actorUserId: 'user-42',
+      assigneeUserId: 'user-42',
       title: 'Подготовить презентацию',
       description: null,
       deadlineKind: 'DATE_ONLY',
       deadlineDate: '2026-09-25',
       deadlineAt: null,
       deadlineRaw: '25.09.2026',
+      source: 'PERSONAL_BOT',
     });
     expect(harness.session()).toBeNull();
     expect(harness.lastNotification().buttons).toContainEqual({

@@ -40,12 +40,14 @@ describe('DrizzleActionCreateRepository', () => {
       workspaceId: personal.workspaceId,
       chatId: personal.chatId,
       actorUserId: personal.userId,
+      assigneeUserId: personal.userId,
       title: 'Подготовить презентацию',
       description: 'К защите проекта',
       deadlineKind: 'DATE_ONLY' as const,
       deadlineDate: '2026-09-25',
       deadlineAt: null,
       deadlineRaw: '25.09.2026',
+      source: 'PERSONAL_BOT' as const,
     };
 
     expect(await repository.create(input)).toEqual({ actionId: input.id, created: true });
@@ -89,14 +91,16 @@ describe('DrizzleActionCreateRepository', () => {
         workspaceId: owner.workspaceId,
         chatId: owner.chatId,
         actorUserId: outsider.userId,
+        assigneeUserId: outsider.userId,
         title: 'Чужое дело',
         description: null,
         deadlineKind: 'UNKNOWN',
         deadlineDate: null,
         deadlineAt: null,
         deadlineRaw: null,
+        source: 'PERSONAL_BOT',
       }),
-    ).rejects.toThrow('Personal workspace is unavailable');
+    ).rejects.toThrow('Action workspace is unavailable');
     expect(await database.select().from(actions)).toHaveLength(0);
   });
 });
