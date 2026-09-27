@@ -36,6 +36,7 @@ import {
 } from '../../modules/auth';
 import { BullMqNotificationPublisher } from '../../modules/notifications';
 import { DrizzlePersonalWorkspaceStore } from '../../modules/personal';
+import { miniAppSessionCookieOptions } from './miniapp-session-cookie';
 import {
   BullMqDetectionMessaging,
   DrizzleDetectionManagementStore,
@@ -92,13 +93,7 @@ export function registerMiniAppApi(
   };
 
   const setSessionCookie = (reply: FastifyReply, token: string): void => {
-    reply.setCookie(SESSION_COOKIE, token, {
-      path: '/api',
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: config.NODE_ENV === 'production',
-      maxAge: config.MINIAPP_SESSION_TTL_SECONDS,
-    });
+    reply.setCookie(SESSION_COOKIE, token, miniAppSessionCookieOptions(config));
   };
 
   app.post('/api/auth/max', async (request, reply) => {
@@ -164,7 +159,7 @@ export function registerMiniAppApi(
 
   app.delete('/api/auth/session', async (request, reply) => {
     await sessions.delete(request.cookies[SESSION_COOKIE]);
-    reply.clearCookie(SESSION_COOKIE, { path: '/api' });
+    reply.clearCookie(SESSION_COOKIE, miniAppSessionCookieOptions(config));
     return reply.code(204).send();
   });
 
