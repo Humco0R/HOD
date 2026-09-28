@@ -1,0 +1,151 @@
+version: '1.0'
+solution:
+  id: hod
+  name: ХОД
+  team: 'MANUAL SUBMISSION VALUE: team name'
+api:
+  contract: ./openapi.yaml
+  base_url:
+    local: http://localhost:8080
+    production: 'MANUAL SUBMISSION VALUE: public HTTPS URL'
+  content_type: application/json
+  authentication:
+    production: signed MAX initData exchanged at POST /api/auth/max for an HttpOnly hod_session cookie
+    live_test_value: 'MANUAL SUBMISSION VALUE: fresh signed MAX initData or protected evaluator access instructions'
+    local_verification:
+      enabled_only_when: NODE_ENV=development and MINIAPP_DEV_AUTH=true
+      endpoint: POST /api/auth/dev
+      body: { externalUserId: '<SEE test_data.roles>' }
+    note: No repository-stored production login, password, initData, cookie or provider secret exists.
+required_checks:
+  - id: readiness
+    role: unauthenticated technical expert
+    method: GET
+    path: /health/ready
+    parameters: []
+    expected_status_codes: [200, 503]
+    expected_content_type: application/json
+    required_response_fields: [status, dependencies.postgres, dependencies.redis]
+    pass_condition: HTTP 200, status=ready, postgres=up, redis=up; when MAX is configured, dependencies.max=up is also required.
+  - id: max_auth
+    role: MAX Mini App user
+    method: POST
+    path: /api/auth/max
+    body:
+      initData: 'MANUAL SUBMISSION VALUE: fresh signed MAX initData'
+    expected_status_codes: [200, 401, 403, 503]
+    expected_content_type: application/json
+    required_response_fields: [id, firstName, lastName, externalUserId]
+    pass_condition: Valid fresh initData returns 200 and an HttpOnly hod_session cookie; invalid data returns 401.
+  - id: current_user
+    role: authenticated workspace member
+    method: GET
+    path: /api/me
+    headers:
+      Cookie: hod_session=<SESSION_FROM_MAX_AUTH>
+    expected_status_codes: [200, 401]
+    expected_content_type: application/json
+    required_response_fields: [id, firstName, lastName, externalUserId]
+  - id: list_assigned_actions
+    role: authenticated workspace member
+    method: GET
+    path: /api/actions
+    query:
+      view: assigned
+    headers:
+      Cookie: hod_session=<SESSION_FROM_MAX_AUTH>
+    expected_status_codes: [200, 401]
+    expected_content_type: application/json
+    required_response_fields: [actions]
+  - id: create_personal_action
+    role: authenticated MAX user
+    method: POST
+    path: /api/actions
+    headers:
+      Cookie: hod_session=<SESSION_FROM_MAX_AUTH>
+      Origin: '<CONFIGURED_MINIAPP_ORIGIN>'
+    body:
+      title: Проверить тестовый объект
+      description: Тестовые данные для технической проверки
+      deadlineKind: UNKNOWN
+      deadlineDate: null
+      deadlineAt: null
+      idempotencyKey: '<NEW_UUID>'
+    expected_status_codes: [200, 400, 401, 403]
+    expected_content_type: application/json
+    required_response_fields: [id, created]
+    pass_condition: The same idempotencyKey returns the same Action and does not create a duplicate.
+  - id: action_detail
+    role: authorized action participant
+    method: GET
+    path: /api/actions/{id}
+    path_parameters:
+      id: '<ACTION_UUID>'
+    headers:
+      Cookie: hod_session=<SESSION_FROM_MAX_AUTH>
+    expected_status_codes: [200, 401, 404]
+    expected_content_type: application/json
+    required_response_fields: [id, title, status, creator, assignee, events, attachments]
+  - id: action_transition
+    role: authorized creator or assignee according to state
+    method: POST
+    path: /api/actions/{id}/transitions
+    path_parameters:
+      id: '<ACTION_UUID>'
+    headers:
+      Cookie: hod_session=<SESSION_FROM_MAX_AUTH>
+      Origin: '<CONFIGURED_MINIAPP_ORIGIN>'
+    body:
+      command: ACCEPT
+      idempotencyKey: '<UNIQUE_TEST_KEY>'
+    expected_status_codes: [200, 400, 401, 403, 404, 409]
+    expected_content_type: application/json
+    required_response_fields: [status, idempotent]
+  - id: forbidden_cross_workspace_read
+    role: authenticated user from another workspace
+    method: GET
+    path: /api/actions/{id}
+    path_parameters:
+      id: '<FOREIGN_ACTION_UUID>'
+    headers:
+      Cookie: hod_session=<FOREIGN_SESSION>
+    expected_status_codes: [404]
+    expected_content_type: application/json
+    required_response_fields: [error]
+test_data:
+  classification: synthetic/manual technical-check data
+  compose_override: docker-compose.api-test.yml
+  seed:
+    powershell: Get-Content -Raw scripts/api-test-seed.sql | docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U hod -d hod
+    bash: docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U hod -d hod < scripts/api-test-seed.sql
+  reset:
+    powershell: Get-Content -Raw scripts/api-test-reset.sql | docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U hod -d hod
+    bash: docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U hod -d hod < scripts/api-test-reset.sql
+  roles:
+    creator_owner:
+      externalUserId: '990000001'
+      userId: 00000000-0000-4000-8000-000000000001
+    assignee_member:
+      externalUserId: '990000002'
+      userId: 00000000-0000-4000-8000-000000000002
+    foreign_owner:
+      externalUserId: '990000003'
+      userId: 00000000-0000-4000-8000-000000000003
+  stable_ids:
+    main_workspace: 00000000-0000-4000-8000-000000000101
+    foreign_workspace: 00000000-0000-4000-8000-000000000102
+    proof_action: 00000000-0000-4000-8000-000000000301
+    foreign_action: 00000000-0000-4000-8000-000000000302
+  destructive_behavior: Integration tests truncate their dedicated test database and must never target hod or postgres.
+  seed_scope: Seed/reset scripts touch only the stable IDs listed above and their dependent rows; they do not truncate the database.
+verification_order:
+  - Start with docker compose -f docker-compose.yml -f docker-compose.api-test.yml up -d --build.
+  - Apply test_data.seed after migrate exits successfully.
+  - Create creator and assignee cookies through POST /api/auth/dev using the listed externalUserId values.
+  - Verify assigned/created views and the PHOTO proof lifecycle on proof_action.
+  - Create a foreign-owner cookie and verify cross-workspace isolation in both directions.
+  - Run test_data.reset when the manual API check is complete.
+notes:
+  - Replace MANUAL SUBMISSION VALUE fields only in the final protected submission material.
+  - Never commit live initData, session cookies, bot tokens, provider credentials or passwords.
+  - MAX webhook /max/webhook is provider-facing and is therefore excluded from user API checks.
