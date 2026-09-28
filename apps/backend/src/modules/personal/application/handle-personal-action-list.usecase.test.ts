@@ -33,8 +33,9 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().buttons).toEqual([
       { text: '📥 Полученные', payload: 'hod:personal:actions:received', row: 0 },
       { text: '📤 Заданные', payload: 'hod:personal:actions:given', row: 1 },
-      { text: '🔎 На проверке · 1', payload: 'hod:personal:actions:review:0', row: 2 },
-      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 3 },
+      { text: '👥 Команда', payload: 'hod:personal:actions:team', row: 2 },
+      { text: '🔎 На проверке · 1', payload: 'hod:personal:actions:review:0', row: 3 },
+      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 4 },
     ]);
     expect(harness.list).toHaveBeenCalledWith(
       '22222222-2222-4222-8222-222222222222',
@@ -43,6 +44,13 @@ describe('HandlePersonalActionListUseCase', () => {
     );
 
     await harness.useCase.handle(callback('hod:personal:actions:received'));
+    expect(harness.lastNotification().buttons).toContainEqual({
+      text: '🌐 Все источники · 6',
+      payload: 'hod:personal:actions:received:source:all',
+      row: 0,
+    });
+
+    await harness.useCase.handle(callback('hod:personal:actions:received:source:all'));
     expect(harness.list).toHaveBeenCalledWith(
       '22222222-2222-4222-8222-222222222222',
       'assigned',
@@ -50,22 +58,22 @@ describe('HandlePersonalActionListUseCase', () => {
     );
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '🔥 Активные · 3',
-      payload: 'hod:personal:actions:received:active:0',
+      payload: 'hod:personal:actions:received:source:all:active:0',
       row: 0,
     });
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '📅 На сегодня · 1',
-      payload: 'hod:personal:actions:received:today:0',
+      payload: 'hod:personal:actions:received:source:all:today:0',
       row: 1,
     });
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '⚠️ Просроченные · 1',
-      payload: 'hod:personal:actions:received:overdue:0',
+      payload: 'hod:personal:actions:received:source:all:overdue:0',
       row: 2,
     });
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '✅ Выполненные · 2',
-      payload: 'hod:personal:actions:received:completed:0',
+      payload: 'hod:personal:actions:received:source:all:completed:0',
       row: 3,
     });
   });
@@ -86,7 +94,7 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().text).toContain('Показаны 1–5');
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '➡️ Ещё',
-      payload: 'hod:personal:actions:received:active:1',
+      payload: 'hod:personal:actions:received:source:all:active:1',
       row: 5,
     });
     expect(
@@ -97,12 +105,12 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().text).toContain('Показаны 11–12');
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '⬅️ Предыдущие',
-      payload: 'hod:personal:actions:received:active:1',
+      payload: 'hod:personal:actions:received:source:all:active:1',
       row: 5,
     });
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '⬅️ Назад',
-      payload: 'hod:personal:actions:received',
+      payload: 'hod:personal:actions:received:source:all',
       row: 6,
     });
     expect(harness.lastNotification().buttons.some((button) => button.text === '➡️ Ещё')).toBe(
@@ -155,7 +163,7 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().text).toContain('Дело 1');
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '⬅️ Назад',
-      payload: 'hod:personal:actions:received',
+      payload: 'hod:personal:actions:received:source:all',
       row: 6,
     });
   });
@@ -181,7 +189,7 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().text).not.toContain('Дело 2');
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '1️⃣ Дело 1',
-      payload: `hod:personal:action:detail:${delegated.id}:given:active:0`,
+      payload: `hod:personal:action:detail:${delegated.id}:given:all:active:0`,
       row: 0,
     });
   });
@@ -210,7 +218,7 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '🔎 На проверке · 6',
       payload: 'hod:personal:actions:review:0',
-      row: 2,
+      row: 3,
     });
 
     await harness.useCase.handle(callback('hod:personal:actions:review:0'));
@@ -245,8 +253,62 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '🔎 На проверке · 5',
       payload: 'hod:personal:actions:review:0',
-      row: 2,
+      row: 3,
     });
+  });
+
+  it('filters personal lists by source chat and keeps personal actions separate', async () => {
+    const groupAction = summary(1, 'NEW');
+    const personalAction = summary(2, 'NEW');
+    personalAction.sourceChat = {
+      id: '20000000-0000-4000-8000-000000000002',
+      title: 'Личные дела',
+      context: 'DIALOG',
+    };
+    const harness = createHarness([groupAction, personalAction]);
+
+    await harness.useCase.handle(callback('hod:personal:actions:received'));
+    expect(harness.lastNotification().buttons).toContainEqual(
+      expect.objectContaining({ text: '💬 Рабочая беседа · 1' }),
+    );
+    expect(harness.lastNotification().buttons).toContainEqual(
+      expect.objectContaining({ text: '👤 Личные дела · 1' }),
+    );
+
+    await harness.useCase.handle(
+      callback(`hod:personal:actions:received:source:${personalAction.sourceChat.id}`),
+    );
+    expect(harness.lastNotification().buttons).toContainEqual(
+      expect.objectContaining({ text: '🔥 Активные · 1' }),
+    );
+
+    await harness.useCase.handle(
+      callback(`hod:personal:actions:received:source:${personalAction.sourceChat.id}:active:0`),
+    );
+    expect(harness.lastNotification().text).toContain('Дело 2');
+    expect(harness.lastNotification().text).not.toContain('Дело 1');
+  });
+
+  it('opens team actions from group workspaces', async () => {
+    const teammateAction = summary(1, 'IN_PROGRESS');
+    teammateAction.creator = {
+      id: '33333333-3333-4333-8333-333333333333',
+      firstName: 'Анна',
+      lastName: null,
+      username: null,
+    };
+    const harness = createHarness([teammateAction]);
+
+    await harness.useCase.handle(callback('hod:personal:actions:team'));
+
+    expect(harness.list).toHaveBeenCalledWith(
+      '22222222-2222-4222-8222-222222222222',
+      'team',
+      expect.any(Date),
+    );
+    expect(harness.lastNotification().buttons).toContainEqual(
+      expect.objectContaining({ text: '💬 Рабочая беседа · 1' }),
+    );
   });
 });
 
@@ -317,6 +379,11 @@ function summary(
     expectedResultText: null,
     creator: participant,
     assignee: participant,
+    sourceChat: {
+      id: '20000000-0000-4000-8000-000000000001',
+      title: 'Рабочая беседа',
+      context: 'GROUP',
+    },
     attentionReasons,
     updatedAt: '2026-09-23T08:00:00.000Z',
   };

@@ -153,6 +153,11 @@ function actionDetail(status: ActionDetail['status'], isAuthorized: boolean): Ac
     expectedResultText: null,
     creator: { ...participant, id: isAuthorized ? userId : '33333333-3333-4333-8333-333333333333' },
     assignee: participant,
+    sourceChat: {
+      id: '44444444-4444-4444-8444-444444444444',
+      title: 'Рабочая беседа',
+      context: 'GROUP',
+    },
     attentionReasons: [],
     updatedAt: new Date().toISOString(),
     description: null,

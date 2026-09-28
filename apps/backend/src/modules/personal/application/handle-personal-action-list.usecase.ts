@@ -7,12 +7,16 @@ import { actionCreatorLabel } from './personal-action-creator';
 import type { PersonalWorkspaceStore } from './personal-workspace.port';
 
 type PersonalListCategory = 'active' | 'today' | 'overdue' | 'completed' | 'review';
-type PersonalListView = 'received' | 'given' | 'review';
+type PersonalListView = 'received' | 'given' | 'team' | 'review';
+type SourceFilter = string;
 const pageSize = 5;
-const viewPattern = /^hod:personal:actions:(received|given)$/;
+const viewPattern = /^hod:personal:actions:(received|given|team)$/;
+const sourcePattern = /^hod:personal:actions:(received|given|team):source:(all|[0-9a-f-]{36})$/i;
 const reviewPattern = /^hod:personal:actions:review:(\d{1,4})$/;
 const listPattern =
-  /^hod:personal:actions:(received|given):(active|today|overdue|completed):(\d{1,4})$/;
+  /^hod:personal:actions:(received|given|team):(active|today|overdue|completed):(\d{1,4})$/;
+const filteredListPattern =
+  /^hod:personal:actions:(received|given|team):source:(all|[0-9a-f-]{36}):(active|today|overdue|completed):(\d{1,4})$/i;
 const legacyListPattern = /^hod:personal:actions:(active|today|overdue|completed):(\d{1,4})$/;
 const categoryLabels: Record<PersonalListCategory, string> = {
   active: '🔥 Активные',
@@ -35,10 +39,21 @@ export class HandlePersonalActionListUseCase implements InboundChatEventHandler 
     if (event.kind !== 'message.callback' || !event.payload) return;
     const isViewMenu = event.payload === 'hod:personal:actions';
     const viewMatch = viewPattern.exec(event.payload);
+    const sourceMatch = sourcePattern.exec(event.payload);
     const reviewMatch = reviewPattern.exec(event.payload);
     const listMatch = listPattern.exec(event.payload);
+    const filteredListMatch = filteredListPattern.exec(event.payload);
     const legacyListMatch = legacyListPattern.exec(event.payload);
-    if (!isViewMenu && !viewMatch && !reviewMatch && !listMatch && !legacyListMatch) return;
+    if (
+      !isViewMenu &&
+      !viewMatch &&
+      !sourceMatch &&
+      !reviewMatch &&
+      !listMatch &&
+      !filteredListMatch &&
+      !legacyListMatch
+    )
+      return;
 
     const externalUserId = event.actor.externalUserId;
     const personal = await this.workspaces.findByExternalUserId(externalUserId);
@@ -81,28 +96,38 @@ export class HandlePersonalActionListUseCase implements InboundChatEventHandler 
       return;
     }
 
-    const view: PersonalListView =
-      viewMatch?.[1] === 'given' || listMatch?.[1] === 'given' ? 'given' : 'received';
+    const view: PersonalListView = (viewMatch?.[1] ??
+      sourceMatch?.[1] ??
+      filteredListMatch?.[1] ??
+      listMatch?.[1] ??
+      'received') as 'received' | 'given' | 'team';
     const actions = await this.actions.list(
       personal.userId,
-      view === 'received' ? 'assigned' : 'created',
+      view === 'received' ? 'assigned' : view === 'given' ? 'created' : 'team',
       new Date(),
     );
-    const visibleActions =
+    const actionsForView =
       view === 'given'
         ? actions.filter((action) => action.assignee.id !== personal.userId)
         : actions;
+    const sourceFilter = filteredListMatch?.[2] ?? sourceMatch?.[2] ?? 'all';
+    const visibleActions = filterBySource(actionsForView, sourceFilter);
     const notification = viewMatch
-      ? categoryMenu(externalUserId, visibleActions, view)
-      : actionPage(
-          externalUserId,
-          visibleActions,
-          view,
-          (listMatch?.[2] ?? legacyListMatch?.[1]) as PersonalListCategory,
-          Number(listMatch?.[3] ?? legacyListMatch?.[2]),
-          personal.timezone,
-          personal.userId,
-        );
+      ? sourceMenu(externalUserId, actionsForView, view)
+      : sourceMatch
+        ? categoryMenu(externalUserId, visibleActions, view, sourceFilter)
+        : actionPage(
+            externalUserId,
+            visibleActions,
+            view,
+            (filteredListMatch?.[3] ??
+              listMatch?.[2] ??
+              legacyListMatch?.[1]) as PersonalListCategory,
+            Number(filteredListMatch?.[4] ?? listMatch?.[3] ?? legacyListMatch?.[2]),
+            personal.timezone,
+            personal.userId,
+            sourceFilter,
+          );
     await this.notifications.publish(notification, `personal-actions-${event.callbackId}`);
   }
 }
@@ -114,8 +139,37 @@ function viewMenu(externalUserId: string, reviewCount: number): OutboundNotifica
     buttons: [
       { text: '📥 Полученные', payload: 'hod:personal:actions:received', row: 0 },
       { text: '📤 Заданные', payload: 'hod:personal:actions:given', row: 1 },
-      { text: `🔎 На проверке · ${reviewCount}`, payload: 'hod:personal:actions:review:0', row: 2 },
-      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 3 },
+      { text: '👥 Команда', payload: 'hod:personal:actions:team', row: 2 },
+      { text: `🔎 На проверке · ${reviewCount}`, payload: 'hod:personal:actions:review:0', row: 3 },
+      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 4 },
+    ],
+  };
+}
+
+function sourceMenu(
+  externalUserId: string,
+  actions: ActionSummary[],
+  view: Exclude<PersonalListView, 'review'>,
+): OutboundNotification {
+  const sources = [
+    ...new Map(actions.map((action) => [action.sourceChat.id, action.sourceChat])).values(),
+  ].sort((left, right) => sourceLabel(left).localeCompare(sourceLabel(right), 'ru'));
+  return {
+    target: { type: 'USER', externalId: externalUserId },
+    text: `${viewLabel(view)}\n\nИз какой беседы показать дела?`,
+    buttons: [
+      {
+        text: `🌐 Все источники · ${actions.length}`,
+        payload: `hod:personal:actions:${view}:source:all`,
+        row: 0,
+      },
+      ...sources.map((source, index) => ({
+        text: `${source.context === 'DIALOG' ? '👤' : '💬'} ${compactTitle(sourceLabel(source), 32)} · ${actions.filter((action) => action.sourceChat.id === source.id).length}`,
+        payload: `hod:personal:actions:${view}:source:${source.id}`,
+        row: index + 1,
+      })),
+      { text: '⬅️ Назад', payload: 'hod:personal:actions', row: sources.length + 1 },
+      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: sources.length + 2 },
     ],
   };
 }
@@ -123,19 +177,20 @@ function viewMenu(externalUserId: string, reviewCount: number): OutboundNotifica
 function categoryMenu(
   externalUserId: string,
   actions: ActionSummary[],
-  view: PersonalListView,
+  view: Exclude<PersonalListView, 'review'>,
+  sourceFilter: SourceFilter,
 ): OutboundNotification {
   const categories = listCategories;
   return {
     target: { type: 'USER', externalId: externalUserId },
-    text: `${view === 'received' ? '📥 Полученные' : '📤 Заданные'}\n\nВыбери категорию:`,
+    text: `${viewLabel(view)}\n${sourceFilter === 'all' ? 'Все источники' : sourceLabel(actions[0]?.sourceChat)}\n\nВыбери категорию:`,
     buttons: [
       ...categories.map((category, row) => ({
         text: `${categoryLabels[category]} · ${filterActions(actions, category).length}`,
-        payload: listPayload(view, category, 0),
+        payload: listPayload(view, sourceFilter, category, 0),
         row,
       })),
-      { text: '⬅️ Назад', payload: 'hod:personal:actions', row: 4 },
+      { text: '⬅️ Назад', payload: `hod:personal:actions:${view}`, row: 4 },
       { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 5 },
     ],
   };
@@ -149,6 +204,7 @@ function actionPage(
   requestedPage: number,
   timezone: string,
   currentUserId: string,
+  sourceFilter: SourceFilter = 'all',
 ): OutboundNotification {
   const filtered = filterActions(actions, category);
   const sorted =
@@ -162,26 +218,29 @@ function actionPage(
     payload:
       view === 'review'
         ? `hod:personal:action:review:${action.id}:${page}`
-        : `hod:personal:action:detail:${action.id}:${view}:${category}:${page}`,
+        : `hod:personal:action:detail:${action.id}:${view}:${sourceFilter}:${category}:${page}`,
     row: index,
   }));
   if (page > 0) {
     buttons.push({
       text: '⬅️ Предыдущие',
-      payload: listPayload(view, category, page - 1),
+      payload: listPayload(view, sourceFilter, category, page - 1),
       row: 5,
     });
   }
   if (page < lastPage) {
     buttons.push({
       text: '➡️ Ещё',
-      payload: listPayload(view, category, page + 1),
+      payload: listPayload(view, sourceFilter, category, page + 1),
       row: 5,
     });
   }
   buttons.push({
     text: '⬅️ Назад',
-    payload: view === 'review' ? 'hod:personal:actions' : `hod:personal:actions:${view}`,
+    payload:
+      view === 'review'
+        ? 'hod:personal:actions'
+        : `hod:personal:actions:${view}:source:${sourceFilter}`,
     row: 6,
   });
   buttons.push({ text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 7 });
@@ -194,7 +253,9 @@ function actionPage(
     const participant =
       view === 'received'
         ? `От: ${actionCreatorLabel(action, currentUserId)}`
-        : `Кому: ${participantLabel(action.assignee)}`;
+        : view === 'team'
+          ? `От: ${actionCreatorLabel(action, currentUserId)} · Кому: ${participantLabel(action.assignee)}`
+          : `Кому: ${participantLabel(action.assignee)}`;
     return `${first + index + 1}. ${compactTitle(action.title, 85)}\n   ${participant}\n   ${status}${deadline ? ` · до ${deadline}` : ''}`;
   });
   return {
@@ -288,10 +349,32 @@ function participantLabel(participant: ActionSummary['assignee']): string {
   );
 }
 
-function listPayload(view: PersonalListView, category: PersonalListCategory, page: number): string {
+function listPayload(
+  view: PersonalListView,
+  sourceFilter: SourceFilter,
+  category: PersonalListCategory,
+  page: number,
+): string {
   return view === 'review'
     ? `hod:personal:actions:review:${page}`
-    : `hod:personal:actions:${view}:${category}:${page}`;
+    : `hod:personal:actions:${view}:source:${sourceFilter}:${category}:${page}`;
+}
+
+function filterBySource(actions: ActionSummary[], sourceFilter: SourceFilter): ActionSummary[] {
+  return sourceFilter === 'all'
+    ? actions
+    : actions.filter((action) => action.sourceChat.id === sourceFilter);
+}
+
+function sourceLabel(source: ActionSummary['sourceChat'] | undefined): string {
+  if (!source || source.context === 'DIALOG') return 'Личные дела';
+  return source.title?.trim() || 'Беседа без названия';
+}
+
+function viewLabel(view: Exclude<PersonalListView, 'review'>): string {
+  if (view === 'received') return '📥 Полученные';
+  if (view === 'given') return '📤 Заданные';
+  return '👥 Команда';
 }
 
 function reviewActions(actions: ActionSummary[], currentUserId: string): ActionSummary[] {

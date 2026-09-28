@@ -380,11 +380,12 @@ export function registerMiniAppApi(
     const attachment = await attachmentStore.getForDownload(id, session.userId);
     if (!attachment) throw app.httpErrors.notFound('Attachment not found');
     const content = await proofStorage.read(attachment.storageKey);
+    const disposition = attachment.mimeType.startsWith('image/') ? 'inline' : 'attachment';
     return reply
       .type(attachment.mimeType)
       .header(
         'Content-Disposition',
-        `attachment; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
+        `${disposition}; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
       )
       .send(content);
   });

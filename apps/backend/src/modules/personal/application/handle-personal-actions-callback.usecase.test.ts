@@ -102,6 +102,39 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
     expect(harness.publish.mock.lastCall?.[0].text).toContain('Постановщик: Анна Соколова');
   });
 
+  it('opens the saved source context from an action card', async () => {
+    const harness = createHarness();
+    harness.getDetail.mockResolvedValue({
+      ...actionDetail(),
+      sourceContext: [
+        {
+          messageId: 'source-1',
+          senderMaxUserId: '42',
+          timestamp: '2026-09-22T08:00:00.000Z',
+          text: 'Антон, проверь монтаж и пришли фото результата',
+        },
+      ],
+    });
+
+    await harness.useCase.handle(callbackEvent(`hod:personal:action:detail:${actionId}`));
+    expect(harness.publish.mock.lastCall?.[0].buttons).toContainEqual(
+      expect.objectContaining({
+        text: '💬 Контекст',
+        payload: `hod:personal:action:context:${actionId}`,
+      }),
+    );
+
+    await harness.useCase.handle(callbackEvent(`hod:personal:action:context:${actionId}`));
+    expect(harness.publish.mock.lastCall?.[0].text).toContain(
+      'Антон, проверь монтаж и пришли фото результата',
+    );
+    expect(harness.publish.mock.lastCall?.[0].buttons).toContainEqual({
+      text: '⬅️ К делу',
+      payload: `hod:personal:action:detail:${actionId}`,
+      row: 0,
+    });
+  });
+
   it('returns from a selected action to the same list page', async () => {
     const harness = createHarness();
 
@@ -114,6 +147,22 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
       payload: 'hod:personal:actions:received:active:2',
       row: 2,
     });
+  });
+
+  it('returns from a source-filtered team action to the same page', async () => {
+    const harness = createHarness();
+    const sourceChatId = '44444444-4444-4444-8444-444444444444';
+
+    await harness.useCase.handle(
+      callbackEvent(`hod:personal:action:detail:${actionId}:team:${sourceChatId}:active:2`),
+    );
+
+    expect(harness.publish.mock.lastCall?.[0].buttons).toContainEqual(
+      expect.objectContaining({
+        text: '⬅️ Назад',
+        payload: `hod:personal:actions:team:source:${sourceChatId}:active:2`,
+      }),
+    );
   });
 
   it('opens a given task for viewing without edit or lifecycle buttons', async () => {
@@ -452,6 +501,11 @@ function actionDetail(): ActionDetail {
     expectedResultText: null,
     creator: participant,
     assignee: participant,
+    sourceChat: {
+      id: '44444444-4444-4444-8444-444444444444',
+      title: 'Рабочая беседа',
+      context: 'GROUP',
+    },
     attentionReasons: [],
     updatedAt: '2026-09-22T08:00:00.000Z',
     description: null,

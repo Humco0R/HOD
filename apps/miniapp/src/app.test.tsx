@@ -3,10 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ActionSummary } from '@hod/contracts';
+import type { ActionDetail, ActionSummary } from '@hod/contracts';
 
 import { App, ActionCard } from './app';
-import { createAction, ensureSession, listActions } from './api';
+import { createAction, ensureSession, getAction, listActions } from './api';
 
 vi.mock('./api', () => ({
   ensureSession: vi.fn(),
@@ -44,6 +44,11 @@ const action: ActionSummary = {
     firstName: 'Антон',
     lastName: 'Соколов',
     username: null,
+  },
+  sourceChat: {
+    id: '66666666-6666-4666-8666-666666666666',
+    title: 'Монтажная бригада',
+    context: 'GROUP',
   },
   attentionReasons: ['AWAITING_VERIFICATION'],
   updatedAt: '2026-09-20T10:00:00.000Z',
@@ -139,6 +144,63 @@ describe('Mini App', () => {
     expect(screen.getByRole('heading', { name: activeToday.title })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: overdue.title })).not.toBeInTheDocument();
     expect(screen.getByText('1 из 3')).toBeInTheDocument();
+  });
+
+  it('filters actions by their source chat and exposes desktop scroll controls', async () => {
+    const personalAction: ActionSummary = {
+      ...action,
+      id: '77777777-7777-4777-8777-777777777777',
+      title: 'Личная задача',
+      sourceChat: {
+        id: '88888888-8888-4888-8888-888888888888',
+        title: 'Личные дела',
+        context: 'DIALOG',
+      },
+    };
+    vi.mocked(listActions).mockResolvedValue({ actions: [action, personalAction] });
+
+    renderWithClient(<App />);
+
+    expect(await screen.findByRole('option', { name: 'Монтажная бригада' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Личные дела' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Прокрутить фильтры влево' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Прокрутить фильтры вправо' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Фильтр по беседе' }), {
+      target: { value: personalAction.sourceChat.id },
+    });
+    expect(screen.getByRole('heading', { name: personalAction.title })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: action.title })).not.toBeInTheDocument();
+    expect(screen.getByText('1 из 1')).toBeInTheDocument();
+  });
+
+  it('shows uploaded photos inline and keeps a link to the original', async () => {
+    const detail: ActionDetail = {
+      ...action,
+      description: null,
+      sourceContext: [],
+      events: [],
+      attachments: [
+        {
+          id: '99999999-9999-4999-8999-999999999999',
+          originalName: 'result.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 1024,
+          downloadUrl: '/api/attachments/99999999-9999-4999-8999-999999999999',
+          createdAt: '2026-09-20T10:00:00.000Z',
+        },
+      ],
+    };
+    vi.mocked(getAction).mockResolvedValue(detail);
+
+    renderWithClient(<App />, `/actions/${action.id}`);
+
+    const preview = await screen.findByRole('img', { name: 'result.jpg' });
+    expect(preview).toHaveAttribute('src', detail.attachments[0]!.downloadUrl);
+    expect(screen.getByRole('link', { name: /Открыть фото/ })).toHaveAttribute(
+      'href',
+      detail.attachments[0]!.downloadUrl,
+    );
   });
 });
 
