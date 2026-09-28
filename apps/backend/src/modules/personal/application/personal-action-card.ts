@@ -92,6 +92,14 @@ export function buildActionButtons(
     });
   }
 
+  if (action.sourceContext.length) {
+    buttons.push({
+      text: '💬 Контекст',
+      payload: `hod:personal:action:context:${action.id}`,
+      row: buttons.length,
+    });
+  }
+
   buttons.push({
     text: listReturn ? '⬅️ Назад' : '📋 Все дела',
     payload: listReturn ?? 'hod:personal:actions',
@@ -108,9 +116,17 @@ export function buildActionButtons(
 }
 
 export function buildReadOnlyActionButtons(
+  action: ActionDetail,
   listReturn: string | null,
 ): OutboundNotification['buttons'] {
   const buttons: OutboundNotification['buttons'] = [];
+  if (action.sourceContext.length) {
+    buttons.push({
+      text: '💬 Контекст',
+      payload: `hod:personal:action:context:${action.id}`,
+      row: buttons.length,
+    });
+  }
   buttons.push({
     text: '⬅️ Назад',
     payload: listReturn ?? 'hod:personal:actions:given',

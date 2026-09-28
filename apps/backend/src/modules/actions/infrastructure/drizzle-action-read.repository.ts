@@ -7,6 +7,7 @@ import {
   actionEvents,
   actions,
   attachments,
+  chats,
   users,
   workspaceMembers,
   workspaces,
@@ -42,16 +43,19 @@ export class DrizzleActionReadRepository implements ActionReadPort {
     if (!allowed.length) return [];
     const workspaceIds = allowed.map((membership) => membership.workspaceId);
     const rows = await this.database
-      .select()
+      .select({ action: actions, chatContext: chats.context })
       .from(actions)
+      .innerJoin(chats, eq(chats.id, actions.sourceChatId))
       .where(inArray(actions.workspaceId, workspaceIds))
       .orderBy(desc(actions.updatedAt));
-    const filtered = rows.filter((action) => {
-      if (action.status === 'CANCELLED') return false;
-      if (view === 'assigned') return action.assigneeId === userId;
-      if (view === 'created') return action.creatorId === userId;
-      return true;
-    });
+    const filtered = rows
+      .filter(({ action, chatContext }) => {
+        if (action.status === 'CANCELLED') return false;
+        if (view === 'assigned') return action.assigneeId === userId;
+        if (view === 'created') return action.creatorId === userId;
+        return chatContext === 'GROUP';
+      })
+      .map(({ action }) => action);
     const timezones = new Map(
       allowed.map((membership) => [membership.workspaceId, membership.settings.timezone]),
     );
@@ -135,6 +139,14 @@ export class DrizzleActionReadRepository implements ActionReadPort {
           .where(inArray(users.id, participantIds))
       : [];
     const byId = new Map(participants.map((participant) => [participant.id, participant]));
+    const sourceChatIds = [...new Set(rows.map((row) => row.sourceChatId))];
+    const sourceChats = sourceChatIds.length
+      ? await this.database
+          .select({ id: chats.id, title: chats.title, context: chats.context })
+          .from(chats)
+          .where(inArray(chats.id, sourceChatIds))
+      : [];
+    const sourceChatById = new Map(sourceChats.map((chat) => [chat.id, chat]));
     return rows.map((action) => ({
       id: action.id,
       title: action.title,
@@ -149,6 +161,7 @@ export class DrizzleActionReadRepository implements ActionReadPort {
       expectedResultText: action.expectedResultText,
       creator: byId.get(action.creatorId)!,
       assignee: byId.get(action.assigneeId)!,
+      sourceChat: sourceChatById.get(action.sourceChatId)!,
       attentionReasons: getAttentionReasons(
         action,
         now,

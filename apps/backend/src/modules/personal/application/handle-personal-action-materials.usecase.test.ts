@@ -106,6 +106,11 @@ function actionDetail(): ActionDetail {
     expectedResultText: null,
     creator: user,
     assignee: user,
+    sourceChat: {
+      id: '00000000-0000-4000-8000-000000000004',
+      title: 'Рабочая беседа',
+      context: 'GROUP',
+    },
     attentionReasons: [],
     updatedAt: new Date().toISOString(),
     description: null,

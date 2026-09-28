@@ -20,8 +20,9 @@ import { PersonalActionEditCallbacks } from './personal-action-edit-callbacks';
 import { personalHelpText, personalMainMenu } from './personal-main-menu';
 
 const detailPattern =
-  /^hod:personal:action:detail:([0-9a-f-]{36})(?::(?:(received|given):)?(active|today|overdue|completed):(\d{1,4}))?$/i;
+  /^hod:personal:action:detail:([0-9a-f-]{36})(?::(?:(received|given|team):)?(?:(all|[0-9a-f-]{36}):)?(active|today|overdue|completed):(\d{1,4}))?$/i;
 const reviewDetailPattern = /^hod:personal:action:review:([0-9a-f-]{36}):(\d{1,4})$/i;
+const contextPattern = /^hod:personal:action:context:([0-9a-f-]{36})$/i;
 
 const editPattern = /^hod:personal:action:edit:([0-9a-f-]{36})$/i;
 
@@ -109,11 +110,19 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
     const detailMatch = detailPattern.exec(event.payload);
 
     if (detailMatch) {
-      const listReturn = detailMatch[3]
-        ? `hod:personal:actions:${detailMatch[2] ?? 'received'}:${detailMatch[3]}:${detailMatch[4]}`
+      const listReturn = detailMatch[4]
+        ? detailMatch[3]
+          ? `hod:personal:actions:${detailMatch[2] ?? 'received'}:source:${detailMatch[3]}:${detailMatch[4]}:${detailMatch[5]}`
+          : `hod:personal:actions:${detailMatch[2] ?? 'received'}:${detailMatch[4]}:${detailMatch[5]}`
         : null;
       await this.showActionDetail(event, detailMatch[1]!, listReturn, detailMatch[2] === 'given');
 
+      return;
+    }
+
+    const contextMatch = contextPattern.exec(event.payload);
+    if (contextMatch) {
+      await this.showActionContext(event, contextMatch[1]!);
       return;
     }
 
@@ -279,11 +288,56 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
         text: details.join('\n'),
 
         buttons: readOnly
-          ? buildReadOnlyActionButtons(listReturn)
+          ? buildReadOnlyActionButtons(action, listReturn)
           : buildActionButtons(action, viewerId, listReturn),
       },
 
       `personal-action-detail-${action.id}-${event.callbackId}`,
+    );
+  }
+
+  private async showActionContext(
+    event: Extract<InboundChatEvent, { kind: 'message.callback' }>,
+    actionId: string,
+  ): Promise<void> {
+    const externalUserId = event.actor.externalUserId;
+    const personal = await this.store.findByExternalUserId(externalUserId);
+    const actor = personal ? null : await this.contexts.resolveActor(actionId, externalUserId);
+    const viewerId = personal?.userId ?? actor?.actorId;
+    if (!viewerId) return;
+
+    const action = await this.actions.getDetail(viewerId, actionId, new Date());
+    if (!action) return;
+
+    const timezone = personal?.timezone ?? this.defaultTimezone;
+    const messages = action.sourceContext.slice(-6).map((message, index) => {
+      const time = new Date(message.timestamp).toLocaleString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: timezone,
+      });
+      return `${index + 1}. ${time}\n${compactContext(message.text)}`;
+    });
+
+    await this.notifications.publish(
+      {
+        target: { type: 'USER', externalId: externalUserId },
+        text: [
+          `💬 Контекст дела «${compactContext(action.title, 120)}»`,
+          messages.length ? messages.join('\n\n') : 'Исходный контекст не сохранён.',
+        ].join('\n\n'),
+        buttons: [
+          {
+            text: '⬅️ К делу',
+            payload: `hod:personal:action:detail:${action.id}`,
+            row: 0,
+          },
+          { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 1 },
+        ],
+      },
+      `personal-action-context-${action.id}-${event.callbackId}`,
     );
   }
 
@@ -339,4 +393,12 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
       `personal-action-delete-confirm-${event.callbackId}`,
     );
   }
+}
+
+function compactContext(value: string | null, maxLength = 700): string {
+  if (!value?.trim()) return 'Сообщение без текста';
+  const characters = Array.from(value.trim());
+  return characters.length > maxLength
+    ? `${characters.slice(0, maxLength - 1).join('')}…`
+    : characters.join('');
 }
