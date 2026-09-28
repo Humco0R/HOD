@@ -139,9 +139,8 @@ function viewMenu(externalUserId: string, reviewCount: number): OutboundNotifica
     buttons: [
       { text: '📥 Полученные', payload: 'hod:personal:actions:received', row: 0 },
       { text: '📤 Заданные', payload: 'hod:personal:actions:given', row: 1 },
-      { text: '👥 Команда', payload: 'hod:personal:actions:team', row: 2 },
-      { text: `🔎 На проверке · ${reviewCount}`, payload: 'hod:personal:actions:review:0', row: 3 },
-      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 4 },
+      { text: `🔎 На проверке · ${reviewCount}`, payload: 'hod:personal:actions:review:0', row: 2 },
+      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 3 },
     ],
   };
 }

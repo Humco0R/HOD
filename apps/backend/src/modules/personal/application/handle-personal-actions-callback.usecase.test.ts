@@ -243,7 +243,7 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
     expect(buttons.map((button) => button.text)).toEqual([
       '✅ Выполнить',
       '✏️ Изменить',
-      '📋 Все дела',
+      '⬅️ Назад',
       '🏠 Главное меню',
     ]);
     expect(buttons).not.toContainEqual(expect.objectContaining({ text: '📄 Подробнее' }));

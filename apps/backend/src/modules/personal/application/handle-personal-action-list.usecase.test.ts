@@ -33,9 +33,8 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().buttons).toEqual([
       { text: '📥 Полученные', payload: 'hod:personal:actions:received', row: 0 },
       { text: '📤 Заданные', payload: 'hod:personal:actions:given', row: 1 },
-      { text: '👥 Команда', payload: 'hod:personal:actions:team', row: 2 },
-      { text: '🔎 На проверке · 1', payload: 'hod:personal:actions:review:0', row: 3 },
-      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 4 },
+      { text: '🔎 На проверке · 1', payload: 'hod:personal:actions:review:0', row: 2 },
+      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 3 },
     ]);
     expect(harness.list).toHaveBeenCalledWith(
       '22222222-2222-4222-8222-222222222222',
@@ -218,7 +217,7 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '🔎 На проверке · 6',
       payload: 'hod:personal:actions:review:0',
-      row: 3,
+      row: 2,
     });
 
     await harness.useCase.handle(callback('hod:personal:actions:review:0'));
@@ -253,7 +252,7 @@ describe('HandlePersonalActionListUseCase', () => {
     expect(harness.lastNotification().buttons).toContainEqual({
       text: '🔎 На проверке · 5',
       payload: 'hod:personal:actions:review:0',
-      row: 3,
+      row: 2,
     });
   });
 
