@@ -36,6 +36,10 @@ describe('HandlePersonalInboxUseCase', () => {
     });
     const welcome = harness.publish.mock.calls[0];
     expect(welcome?.[0].target).toEqual({ type: 'USER', externalId: '42' });
+    expect(welcome?.[0].text).toContain('Дай ХОД своему ДЕЛУ');
+    expect(welcome?.[0].text).toContain('Добавь меня в групповой чат');
+    expect(welcome?.[0].text).toContain('Назначь администратором');
+    expect(welcome?.[0].text).toContain('сам находить поручения');
     expect(welcome?.[0].buttons).toEqual([
       { text: '➕ Создать дело', payload: 'hod:personal:create', row: 0 },
       { text: '📋 Мои дела', payload: 'hod:personal:actions', row: 1 },

@@ -9,20 +9,22 @@ const detectionId = '00000000-0000-4000-8000-000000000001';
 const actionId = '00000000-0000-4000-8000-000000000002';
 
 describe('HandleDetectionCallbackUseCase', () => {
-  it('confirms a group proposal with a buttonless message', async () => {
+  it('confirms a group proposal without posting a confirmation to the chat', async () => {
     const { useCase, publish, assignmentPublish } = harness();
 
     await useCase.handle(callback('900'));
 
     expect(assignmentPublish).toHaveBeenCalledOnce();
-    expect(publish).toHaveBeenCalledWith(
-      {
-        target: { type: 'CHAT', externalId: '900' },
-        text: '✅ Дело создано\n\nПроверить договор',
-        buttons: [],
-      },
-      'detection-confirmed-callback-1',
-    );
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('rejects a group proposal without posting a response to the chat', async () => {
+    const { useCase, publish, reject } = harness();
+
+    await useCase.handle(callback('900', 'reject'));
+
+    expect(reject).toHaveBeenCalledOnce();
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('keeps navigation in a personal confirmation', async () => {
@@ -38,10 +40,27 @@ describe('HandleDetectionCallbackUseCase', () => {
       ],
     });
   });
+
+  it('keeps navigation in a personal rejection', async () => {
+    const { useCase, publish, reject } = harness();
+
+    await useCase.handle(callback(null, 'reject'));
+
+    expect(reject).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledWith(
+      {
+        target: { type: 'USER', externalId: '42' },
+        text: 'Предложение отклонено.',
+        buttons: [{ text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 0 }],
+      },
+      'detection-rejected-callback-1',
+    );
+  });
 });
 
 function callback(
   externalChatId: string | null,
+  operation: 'confirm' | 'reject' = 'confirm',
 ): Extract<InboundChatEvent, { kind: 'message.callback' }> {
   return {
     kind: 'message.callback',
@@ -50,7 +69,7 @@ function callback(
     externalChatId,
     externalMessageId: 'message-1',
     actor: { externalUserId: '42', firstName: 'Иван', lastName: null, username: null },
-    payload: `hod:detection:confirm:${detectionId}`,
+    payload: `hod:detection:${operation}:${detectionId}`,
     callbackId: 'callback-1',
   };
 }
@@ -63,12 +82,13 @@ function harness() {
     creatorName: 'Иван',
     title: 'Проверить договор',
   });
+  const reject = vi.fn<DetectionRepository['reject']>().mockResolvedValue({ idempotent: false });
   const assignmentPublish = vi.fn<AssignmentNotificationPort['publish']>().mockResolvedValue();
   const publish = vi.fn<NotificationPublisher['publish']>().mockResolvedValue();
   const useCase = new HandleDetectionCallbackUseCase(
-    { confirm } as unknown as DetectionRepository,
+    { confirm, reject } as unknown as DetectionRepository,
     { publish: assignmentPublish },
     { publish },
   );
-  return { useCase, publish, assignmentPublish };
+  return { useCase, publish, assignmentPublish, reject };
 }
