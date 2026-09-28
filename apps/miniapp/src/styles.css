@@ -169,12 +169,19 @@ p {
   gap: 12px;
   margin-bottom: 16px;
 }
+.category-scroll-shell {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 6px;
+  margin: 0 -10px;
+}
 .category-scroller {
   display: flex;
   gap: 8px;
-  margin: 0 -16px;
-  padding: 2px 16px 5px;
+  padding: 2px 0 5px;
   overflow-x: auto;
+  scroll-behavior: smooth;
   scrollbar-width: none;
 }
 .category-scroller::-webkit-scrollbar {
@@ -198,8 +205,23 @@ button.filter-chip[aria-pressed='true'] {
   background: var(--accent);
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
 }
+button.filter-scroll-button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+  font-size: 1.5rem;
+  line-height: 1;
+}
 .filter-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: 12px;
@@ -211,6 +233,7 @@ button.filter-chip[aria-pressed='true'] {
 .filter-toolbar label {
   display: grid;
   flex: 1;
+  min-width: 150px;
   gap: 5px;
   color: var(--muted);
   font-size: 0.72rem;
@@ -224,6 +247,7 @@ button.filter-chip[aria-pressed='true'] {
 }
 .filter-result {
   flex: 0 0 auto;
+  margin-left: auto;
   padding-bottom: 10px;
   color: var(--muted);
   font-size: 0.76rem;
@@ -374,6 +398,25 @@ button.filter-chip[aria-pressed='true'] {
   color: var(--accent);
   font-weight: 650;
 }
+.attachment-list a.image-attachment {
+  display: grid;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  text-decoration: none;
+}
+.image-attachment img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  background: #e8f0f8;
+}
+.image-attachment span {
+  padding: 0 12px 12px;
+}
 .action-panel {
   position: sticky;
   bottom: 66px;
@@ -454,10 +497,8 @@ textarea {
     grid-template-columns: repeat(2, 1fr);
   }
   .category-scroller {
-    margin: 0;
     padding-right: 0;
     padding-left: 0;
-    flex-wrap: wrap;
   }
   .bottom-nav {
     right: auto;

@@ -417,9 +417,27 @@ components:
     ExpectedResultType:
       type: string
       enum: [PHOTO, FILE, TEXT, NONE, UNKNOWN]
+    ActionSourceChat:
+      type: object
+      required: [id, title, context]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: [string, 'null'] }
+        context: { type: string, enum: [GROUP, DIALOG] }
     ActionSummary:
       type: object
-      required: [id, title, status, deadlineKind, creator, assignee, attentionReasons, updatedAt]
+      required:
+        [
+          id,
+          title,
+          status,
+          deadlineKind,
+          creator,
+          assignee,
+          sourceChat,
+          attentionReasons,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
@@ -434,6 +452,7 @@ components:
         expectedResultText: { type: [string, 'null'] }
         creator: { $ref: '#/components/schemas/UserSummary' }
         assignee: { $ref: '#/components/schemas/UserSummary' }
+        sourceChat: { $ref: '#/components/schemas/ActionSourceChat' }
         attentionReasons:
           type: array
           items: { type: string, enum: [OVERDUE, BLOCKED, AWAITING_VERIFICATION, DUE_TODAY] }

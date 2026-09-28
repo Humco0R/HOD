@@ -153,6 +153,40 @@ describe('Mini App API', () => {
     expect(created.statusCode).toBe(400);
   });
 
+  it('returns group team actions to a workspace owner with source chat metadata', async () => {
+    const seed = await seedScenario();
+    const ownerCookie = await authenticate(601);
+    const memberCookie = await authenticate(602);
+
+    const ownerTeam = await app.inject({
+      method: 'GET',
+      url: '/api/actions?view=team',
+      headers: { cookie: ownerCookie },
+    });
+    expect(ownerTeam.statusCode).toBe(200);
+    const teamActions = ownerTeam.json<{
+      actions: Array<{
+        id: string;
+        sourceChat: { title: string | null; context: 'GROUP' | 'DIALOG' };
+      }>;
+    }>().actions;
+    expect(
+      teamActions.find(({ id }) => id === seed.optionalResultActionId)?.sourceChat,
+    ).toMatchObject({ title: 'Монтажная бригада', context: 'GROUP' });
+    expect(teamActions.find(({ id }) => id === seed.actionId)?.sourceChat).toMatchObject({
+      title: 'Монтажная бригада',
+      context: 'GROUP',
+    });
+
+    const memberTeam = await app.inject({
+      method: 'GET',
+      url: '/api/actions?view=team',
+      headers: { cookie: memberCookie },
+    });
+    expect(memberTeam.statusCode).toBe(200);
+    expect(memberTeam.json()).toEqual({ actions: [] });
+  });
+
   it('validates MAX identity, isolates workspaces and completes the proof lifecycle', async () => {
     const seed = await seedScenario();
 
@@ -238,6 +272,7 @@ describe('Mini App API', () => {
     });
     expect(download.statusCode).toBe(200);
     expect(download.body).toBe('image-data');
+    expect(download.headers['content-disposition']).toContain('inline');
     expect(download.headers['content-disposition']).toContain('proof.jpg');
 
     const verified = await transition(seed.actionId, creatorCookie, 'VERIFY');
@@ -333,8 +368,8 @@ async function seedScenario() {
   const [chat, foreignChat] = await database
     .insert(chats)
     .values([
-      { workspaceId: workspace!.id, maxChatId: 7001n },
-      { workspaceId: foreignWorkspace!.id, maxChatId: 7002n },
+      { workspaceId: workspace!.id, maxChatId: 7001n, title: 'Монтажная бригада' },
+      { workspaceId: foreignWorkspace!.id, maxChatId: 7002n, title: 'Чужая беседа' },
     ])
     .returning();
   const [action, optionalResultAction, foreignAction] = await database

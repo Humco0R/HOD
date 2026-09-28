@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 
 import type {
@@ -100,31 +100,48 @@ function ActionListPage({ view, title }: { view: 'assigned' | 'created' | 'team'
   const query = useQuery({ queryKey: ['actions', view], queryFn: () => listActions(view) });
   const [category, setCategory] = useState<ActionCategory>('all');
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('all');
+  const [sourceChatId, setSourceChatId] = useState('all');
+  const categoryScroller = useRef<HTMLDivElement>(null);
   const actions = query.data?.actions ?? [];
+  const sourceChats = useMemo(
+    () =>
+      [
+        ...new Map(actions.map((action) => [action.sourceChat.id, action.sourceChat])).values(),
+      ].sort((left, right) => sourceChatLabel(left).localeCompare(sourceChatLabel(right), 'ru')),
+    [actions],
+  );
+  const sourceActions = useMemo(
+    () =>
+      sourceChatId === 'all'
+        ? actions
+        : actions.filter((action) => action.sourceChat.id === sourceChatId),
+    [actions, sourceChatId],
+  );
   const categoryCounts = useMemo(
     () =>
       Object.fromEntries(
         actionCategories.map(({ value }) => [
           value,
-          actions.filter((action) => matchesCategory(action, value)).length,
+          sourceActions.filter((action) => matchesCategory(action, value)).length,
         ]),
       ) as Record<ActionCategory, number>,
-    [actions],
+    [sourceActions],
   );
   const visibleActions = useMemo(
     () =>
       sortActions(
-        actions.filter(
+        sourceActions.filter(
           (action) => matchesCategory(action, category) && matchesDeadline(action, deadlineFilter),
         ),
         category,
       ),
-    [actions, category, deadlineFilter],
+    [sourceActions, category, deadlineFilter],
   );
 
   useEffect(() => {
     setCategory('all');
     setDeadlineFilter('all');
+    setSourceChatId('all');
   }, [view]);
 
   return (
@@ -142,20 +159,58 @@ function ActionListPage({ view, title }: { view: 'assigned' | 'created' | 'team'
       {query.isError && <EmptyState text={errorMessage(query.error)} tone="error" />}
       {query.isSuccess && actions.length > 0 && (
         <div className="action-filters">
-          <div className="category-scroller" role="group" aria-label="Категории дел">
-            {actionCategories.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                className="filter-chip"
-                aria-pressed={category === item.value}
-                onClick={() => setCategory(item.value)}
-              >
-                {item.label} · {categoryCounts[item.value]}
-              </button>
-            ))}
+          <div className="category-scroll-shell">
+            <button
+              type="button"
+              className="filter-scroll-button"
+              aria-label="Прокрутить фильтры влево"
+              onClick={() => categoryScroller.current?.scrollBy({ left: -240, behavior: 'smooth' })}
+            >
+              ‹
+            </button>
+            <div
+              ref={categoryScroller}
+              className="category-scroller"
+              role="group"
+              aria-label="Категории дел"
+            >
+              {actionCategories.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  className="filter-chip"
+                  aria-pressed={category === item.value}
+                  onClick={() => setCategory(item.value)}
+                >
+                  {item.label} · {categoryCounts[item.value]}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="filter-scroll-button"
+              aria-label="Прокрутить фильтры вправо"
+              onClick={() => categoryScroller.current?.scrollBy({ left: 240, behavior: 'smooth' })}
+            >
+              ›
+            </button>
           </div>
           <div className="filter-toolbar">
+            <label>
+              <span>Беседа</span>
+              <select
+                aria-label="Фильтр по беседе"
+                value={sourceChatId}
+                onChange={(event) => setSourceChatId(event.target.value)}
+              >
+                <option value="all">Все источники</option>
+                {sourceChats.map((sourceChat) => (
+                  <option key={sourceChat.id} value={sourceChat.id}>
+                    {sourceChatLabel(sourceChat)}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               <span>Срок</span>
               <select
@@ -171,7 +226,7 @@ function ActionListPage({ view, title }: { view: 'assigned' | 'created' | 'team'
               </select>
             </label>
             <span className="filter-result">
-              {visibleActions.length} из {actions.length}
+              {visibleActions.length} из {sourceActions.length}
             </span>
           </div>
         </div>
@@ -308,6 +363,7 @@ export function ActionCard({ action }: { action: ActionSummary }) {
       </div>
       <h2>{action.title}</h2>
       <p className="muted">Исполнитель: {personName(action.assignee)}</p>
+      <p className="muted">Источник: {sourceChatLabel(action.sourceChat)}</p>
       {action.attentionReasons.length > 0 && (
         <div className="attention-row">
           {action.attentionReasons.map((reason) => (
@@ -405,8 +461,19 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
         <DetailSection title="Доказательства">
           <div className="attachment-list">
             {action.attachments.map((item) => (
-              <a key={item.id} href={item.downloadUrl}>
-                {item.originalName}
+              <a
+                key={item.id}
+                className={item.mimeType.startsWith('image/') ? 'image-attachment' : undefined}
+                href={item.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {item.mimeType.startsWith('image/') && (
+                  <img src={item.downloadUrl} alt={item.originalName} loading="lazy" />
+                )}
+                <span>
+                  {item.mimeType.startsWith('image/') ? 'Открыть фото' : item.originalName}
+                </span>
               </a>
             ))}
           </div>
@@ -771,6 +838,10 @@ function EmptyState({ text, tone }: { text: string; tone?: 'error' }) {
 }
 function personName(person: { firstName: string; lastName: string | null }): string {
   return [person.firstName, person.lastName].filter(Boolean).join(' ');
+}
+function sourceChatLabel(sourceChat: ActionSummary['sourceChat']): string {
+  if (sourceChat.context === 'DIALOG') return 'Личные дела';
+  return sourceChat.title?.trim() || 'Беседа без названия';
 }
 function formatDeadline(action: ActionSummary): string {
   if (action.deadlineAt)

@@ -37,6 +37,11 @@ export const attentionReasonSchema = z.enum([
   'AWAITING_VERIFICATION',
   'DUE_TODAY',
 ]);
+export const actionSourceChatSchema = z.object({
+  id: z.uuid(),
+  title: z.string().nullable(),
+  context: z.enum(['GROUP', 'DIALOG']),
+});
 export const actionSummarySchema = z.object({
   id: z.uuid(),
   title: z.string(),
@@ -51,6 +56,7 @@ export const actionSummarySchema = z.object({
   expectedResultText: z.string().nullable(),
   creator: userSummarySchema,
   assignee: userSummarySchema,
+  sourceChat: actionSourceChatSchema,
   attentionReasons: z.array(attentionReasonSchema),
   updatedAt: z.iso.datetime(),
 });
