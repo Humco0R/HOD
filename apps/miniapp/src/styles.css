@@ -325,7 +325,7 @@ button.filter-scroll-button {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.96);
@@ -394,14 +394,19 @@ button.filter-scroll-button {
   flex-direction: column;
   gap: 8px;
 }
-.attachment-list a {
+button.attachment-button {
+  padding: 0;
   color: var(--accent);
+  background: transparent;
   font-weight: 650;
+  text-align: left;
+  text-decoration: underline;
 }
-.attachment-list a.image-attachment {
+button.attachment-button.image-attachment {
   display: grid;
   gap: 8px;
   overflow: hidden;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--paper);
@@ -416,6 +421,33 @@ button.filter-scroll-button {
 }
 .image-attachment span {
   padding: 0 12px 12px;
+}
+.photo-viewer {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  padding: max(54px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  place-items: center;
+  background: rgba(4, 12, 24, 0.94);
+}
+.photo-viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+button.photo-viewer-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  color: white;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 1.8rem;
+  line-height: 1;
 }
 .action-panel {
   position: sticky;

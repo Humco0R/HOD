@@ -15,6 +15,7 @@ import {
   confirmDetection,
   createAction,
   ensureSession,
+  fetchAttachment,
   getAction,
   getDetection,
   getStartRoute,
@@ -80,7 +81,7 @@ export function App() {
           <Route path="/" element={<Navigate to="/actions" replace />} />
           <Route path="/actions" element={<ActionListPage view="assigned" title="Мои дела" />} />
           <Route path="/created" element={<ActionListPage view="created" title="От меня" />} />
-          <Route path="/team" element={<ActionListPage view="team" title="Команда" />} />
+          <Route path="/team" element={<Navigate to="/actions" replace />} />
           <Route path="/actions/new" element={<CreateActionPage />} />
           <Route path="/actions/:id" element={<ActionDetailPage me={session.data} />} />
           <Route path="/detections/:id" element={<DetectionPage />} />
@@ -90,7 +91,6 @@ export function App() {
       <nav className="bottom-nav" aria-label="Разделы">
         <NavLink to="/actions">Мои дела</NavLink>
         <NavLink to="/created">От меня</NavLink>
-        <NavLink to="/team">Команда</NavLink>
       </nav>
     </div>
   );
@@ -385,6 +385,9 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
   });
   const [reason, setReason] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<ActionDetail['attachments'][number] | null>(
+    null,
+  );
   const transition = useMutation({
     mutationFn: (command: TransitionActionRequestDto['command']) =>
       transitionAction(id, {
@@ -409,6 +412,13 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
       setFile(null);
       await client.invalidateQueries({ queryKey: ['action', id] });
     },
+  });
+  const download = useMutation({
+    mutationFn: async (attachment: ActionDetail['attachments'][number]) => ({
+      attachment,
+      content: await fetchAttachment(attachment.downloadUrl),
+    }),
+    onSuccess: ({ attachment, content }) => saveAttachment(content, attachment.originalName),
   });
   if (query.isPending) return <EmptyState text="Загружаем дело…" />;
   if (query.isError) return <EmptyState text={errorMessage(query.error)} tone="error" />;
@@ -461,12 +471,16 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
         <DetailSection title="Доказательства">
           <div className="attachment-list">
             {action.attachments.map((item) => (
-              <a
+              <button
+                type="button"
                 key={item.id}
-                className={item.mimeType.startsWith('image/') ? 'image-attachment' : undefined}
-                href={item.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
+                className={`attachment-button${
+                  item.mimeType.startsWith('image/') ? ' image-attachment' : ''
+                }`}
+                disabled={download.isPending}
+                onClick={() =>
+                  item.mimeType.startsWith('image/') ? setPhotoPreview(item) : download.mutate(item)
+                }
               >
                 {item.mimeType.startsWith('image/') && (
                   <img src={item.downloadUrl} alt={item.originalName} loading="lazy" />
@@ -474,10 +488,34 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
                 <span>
                   {item.mimeType.startsWith('image/') ? 'Открыть фото' : item.originalName}
                 </span>
-              </a>
+              </button>
             ))}
           </div>
+          {download.isError && <p className="form-error">{errorMessage(download.error)}</p>}
         </DetailSection>
+      )}
+      {photoPreview && (
+        <div
+          className="photo-viewer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Просмотр ${photoPreview.originalName}`}
+          onClick={() => setPhotoPreview(null)}
+        >
+          <button
+            type="button"
+            className="photo-viewer-close"
+            aria-label="Закрыть фото"
+            onClick={() => setPhotoPreview(null)}
+          >
+            ×
+          </button>
+          <img
+            src={photoPreview.downloadUrl}
+            alt={photoPreview.originalName}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
       )}
       {isAssignee && ['IN_PROGRESS', 'BLOCKED'].includes(action.status) && (
         <DetailSection title="Добавить результат">
@@ -531,9 +569,14 @@ function ActionControls({
   run: (command: TransitionActionRequestDto['command']) => void;
   pending: boolean;
 }) {
-  const needsReason = action.status === 'IN_PROGRESS' || action.status === 'DONE';
+  const hasControls =
+    (isAssignee && ['NEW', 'ACCEPTED', 'IN_PROGRESS', 'BLOCKED'].includes(action.status)) ||
+    (isCreator && action.status === 'DONE');
+  if (!hasControls) return null;
+  const needsReason =
+    (isAssignee && action.status === 'IN_PROGRESS') || (isCreator && action.status === 'DONE');
   return (
-    <section className="action-panel">
+    <section className="action-panel" aria-label="Действия с делом">
       {needsReason && (
         <textarea
           value={reason}
@@ -937,6 +980,19 @@ function resultLabel(action: ActionDetail): string {
     )[action.expectedResultType]
   );
 }
+
+function saveAttachment(content: Blob, originalName: string): void {
+  const objectUrl = URL.createObjectURL(content);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = originalName;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Неизвестная ошибка';
 }

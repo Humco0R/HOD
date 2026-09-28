@@ -176,15 +176,10 @@ describe('MAX webhook', () => {
 
   it('acknowledges a direct-dialog callback and removes the previous bot screen', async () => {
     const handle = vi.fn<InboundChatEventHandler['handle']>().mockResolvedValue(undefined);
-    let acknowledgedCallbackId: string | undefined;
-    let acknowledgement: unknown;
+    const acknowledge = vi.fn().mockResolvedValue({ success: true });
     let deletedMessageId: string | undefined;
     const app = createApp({ handle }, (router) => {
-      vi.spyOn(router.bot.api, 'answerOnCallback').mockImplementation((callbackId, extra) => {
-        acknowledgedCallbackId = callbackId;
-        acknowledgement = extra;
-        return Promise.resolve({ success: true });
-      });
+      vi.spyOn(router.bot.api, 'answerOnCallback').mockImplementation(acknowledge);
       vi.spyOn(router.bot.api, 'deleteMessage').mockImplementation((messageId) => {
         deletedMessageId = messageId;
         return Promise.resolve({ success: true });
@@ -202,34 +197,16 @@ describe('MAX webhook', () => {
     expect(handle).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'message.callback', externalChatId: null }),
     );
-    expect(acknowledgedCallbackId).toBe('callback-dialog');
-    expect(acknowledgement).toEqual({
-      message: {
-        text: '✅ Поручение принято\n\nПроверить объект',
-        attachments: [
-          {
-            type: 'inline_keyboard',
-            payload: {
-              buttons: [
-                [{ type: 'callback', text: '🏠 Главное меню', payload: 'hod:personal:menu' }],
-              ],
-            },
-          },
-        ],
-      },
-    });
+    expect(acknowledge).toHaveBeenCalledExactlyOnceWith('callback-dialog');
     expect(deletedMessageId).toBe('message-1');
   });
 
   it('preserves the group id and removes the previous bot message', async () => {
     const handle = vi.fn<InboundChatEventHandler['handle']>().mockResolvedValue(undefined);
+    const acknowledge = vi.fn().mockResolvedValue({ success: true });
     let deletedMessageId: string | undefined;
-    let acknowledgement: unknown;
     const app = createApp({ handle }, (router) => {
-      vi.spyOn(router.bot.api, 'answerOnCallback').mockImplementation((_callbackId, extra) => {
-        acknowledgement = extra;
-        return Promise.resolve({ success: true });
-      });
+      vi.spyOn(router.bot.api, 'answerOnCallback').mockImplementation(acknowledge);
       vi.spyOn(router.bot.api, 'deleteMessage').mockImplementation((messageId) => {
         deletedMessageId = messageId;
         return Promise.resolve({ success: true });
@@ -248,9 +225,7 @@ describe('MAX webhook', () => {
       expect.objectContaining({ kind: 'message.callback', externalChatId: '900' }),
     );
     expect(deletedMessageId).toBe('message-1');
-    expect(acknowledgement).toEqual({
-      message: { text: 'Проверить объект', attachments: [] },
-    });
+    expect(acknowledge).toHaveBeenCalledExactlyOnceWith('callback-chat');
   });
 
   it.each(['dialog', 'chat'] as const)(
@@ -420,9 +395,7 @@ describe('MAX webhook', () => {
 
     expect(response.statusCode).toBe(200);
     expect(handle).not.toHaveBeenCalled();
-    expect(answer).toHaveBeenCalledWith('callback-chat', {
-      message: { text: 'Проверить объект', attachments: [] },
-    });
+    expect(answer).toHaveBeenCalledWith('callback-chat');
     expect(remove).toHaveBeenCalledExactlyOnceWith('message-1');
   });
 
