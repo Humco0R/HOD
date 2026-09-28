@@ -1,0 +1,5 @@
+services:
+  backend:
+    environment:
+      NODE_ENV: development
+      MINIAPP_DEV_AUTH: 'true'

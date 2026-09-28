@@ -1,0 +1,506 @@
+openapi: 3.1.0
+info:
+  title: ХОД Mini App API
+  version: 0.1.0
+  description: Session-authenticated API used by the MAX Mini App. Production authentication requires signed MAX initData.
+servers:
+  - url: http://localhost:8080
+    description: Local Docker Compose
+  - url: https://example.invalid
+    description: Replace with the public HTTPS deployment URL
+tags:
+  - name: Health
+  - name: Auth
+  - name: Actions
+  - name: Detections
+  - name: Attachments
+paths:
+  /:
+    get:
+      tags: [Health]
+      summary: Service metadata
+      security: []
+      responses:
+        '200':
+          description: Service metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceInfo'
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Process liveness
+      security: []
+      responses:
+        '200':
+          description: Process is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { const: ok }
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: PostgreSQL and Redis readiness
+      security: []
+      responses:
+        '200':
+          description: Dependencies are ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '503':
+          description: At least one dependency is down
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+  /api/auth/max:
+    post:
+      tags: [Auth]
+      summary: Exchange signed MAX initData for a server-side session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [initData]
+              properties:
+                initData: { type: string, minLength: 1, maxLength: 16384 }
+      responses:
+        '200':
+          description: Authenticated; sets HttpOnly hod_session cookie
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /api/auth/dev:
+    post:
+      tags: [Auth]
+      summary: Development-only session bootstrap
+      description: Available only when NODE_ENV=development and MINIAPP_DEV_AUTH=true. It is unavailable in the production Compose configuration.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                externalUserId:
+                  type: string
+                  pattern: '^\d{1,20}$'
+                  description: Optional external id of an active seeded development user.
+      responses:
+        '200':
+          description: Development session created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/auth/session:
+    delete:
+      tags: [Auth]
+      summary: Revoke the current session
+      description: Idempotent logout; succeeds even when no session cookie is present.
+      security: []
+      responses:
+        '204': { description: Session revoked }
+  /api/me:
+    get:
+      tags: [Auth]
+      summary: Current authenticated user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/actions:
+    get:
+      tags: [Actions]
+      summary: List visible actions
+      parameters:
+        - in: query
+          name: view
+          schema: { type: string, enum: [assigned, created, team], default: assigned }
+      responses:
+        '200':
+          description: Actions visible to the session user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actions]
+                properties:
+                  actions:
+                    type: array
+                    items: { $ref: '#/components/schemas/ActionSummary' }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Actions]
+      summary: Create a self-assigned personal action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAction' }
+      responses:
+        '200':
+          description: Created or returned idempotently
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, created]
+                properties:
+                  id: { type: string, format: uuid }
+                  created: { type: boolean }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/actions/{id}:
+    get:
+      tags: [Actions]
+      summary: Get an authorized action detail
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Action detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActionDetail' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/actions/{id}/transitions:
+    post:
+      tags: [Actions]
+      summary: Apply an authorized lifecycle transition
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [command, idempotencyKey]
+              properties:
+                command:
+                  type: string
+                  enum: [ACCEPT, START, BLOCK, UNBLOCK, SUBMIT_RESULT, VERIFY, RETURN, CANCEL]
+                reason: { type: string, maxLength: 2000 }
+                idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: Transition result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, idempotent]
+                properties:
+                  status: { $ref: '#/components/schemas/ActionStatus' }
+                  idempotent: { type: boolean }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/actions/{id}/attachments:
+    post:
+      tags: [Attachments]
+      summary: Upload one authorized proof file
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Stored attachment metadata id
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, format: uuid }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+  /api/attachments/{id}:
+    get:
+      tags: [Attachments]
+      summary: Download an authorized proof file
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Attachment bytes; Content-Disposition is attachment
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/detections/{id}:
+    get:
+      tags: [Detections]
+      summary: Get an authorized pending detection
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Detection detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Detection' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Detections]
+      summary: Edit a pending detection before confirmation
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DetectionEdit' }
+      responses:
+        '200':
+          description: Updated detection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Detection' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/detections/{id}/confirm:
+    post:
+      tags: [Detections]
+      summary: Confirm a detection and create one Action
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdempotencyBody' }
+      responses:
+        '200':
+          description: Confirmation result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actionId, idempotent, assigneeExternalUserId, creatorName, title]
+                properties:
+                  actionId: { type: string, format: uuid }
+                  idempotent: { type: boolean }
+                  assigneeExternalUserId: { type: string }
+                  creatorName: { type: string }
+                  title: { type: string }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/detections/{id}/reject:
+    post:
+      tags: [Detections]
+      summary: Reject a pending detection
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Rejection result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [idempotent]
+                properties:
+                  idempotent: { type: boolean }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: hod_session
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error: { type: string }
+              code: { type: string }
+  schemas:
+    ServiceInfo:
+      type: object
+      required: [name, status, version]
+      properties:
+        name: { const: ХОД }
+        status: { const: bootstrap }
+        version: { type: string }
+    Readiness:
+      type: object
+      required: [status, dependencies]
+      properties:
+        status: { type: string, enum: [ready, not_ready] }
+        dependencies:
+          type: object
+          required: [postgres, redis]
+          properties:
+            postgres: { type: string, enum: [up, down] }
+            redis: { type: string, enum: [up, down] }
+    CurrentUser:
+      type: object
+      required: [id, firstName, lastName, externalUserId]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: [string, 'null'] }
+        externalUserId: { type: string }
+    UserSummary:
+      type: object
+      required: [id, firstName, lastName, username]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: [string, 'null'] }
+        username: { type: [string, 'null'] }
+    ActionStatus:
+      type: string
+      enum: [NEW, ACCEPTED, IN_PROGRESS, BLOCKED, DONE, VERIFIED, CANCELLED]
+    DeadlineKind:
+      type: string
+      enum: [EXACT_DATETIME, DATE_ONLY, RELATIVE, DEPENDENCY, UNKNOWN]
+    ExpectedResultType:
+      type: string
+      enum: [PHOTO, FILE, TEXT, NONE, UNKNOWN]
+    ActionSummary:
+      type: object
+      required: [id, title, status, deadlineKind, creator, assignee, attentionReasons, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/ActionStatus' }
+        deadlineKind: { $ref: '#/components/schemas/DeadlineKind' }
+        deadlineAt: { type: [string, 'null'], format: date-time }
+        deadlineDate: { type: [string, 'null'], format: date }
+        deadlineDependency: { type: [string, 'null'] }
+        deadlineRaw: { type: [string, 'null'] }
+        location: { type: [string, 'null'] }
+        expectedResultType: { $ref: '#/components/schemas/ExpectedResultType' }
+        expectedResultText: { type: [string, 'null'] }
+        creator: { $ref: '#/components/schemas/UserSummary' }
+        assignee: { $ref: '#/components/schemas/UserSummary' }
+        attentionReasons:
+          type: array
+          items: { type: string, enum: [OVERDUE, BLOCKED, AWAITING_VERIFICATION, DUE_TODAY] }
+        updatedAt: { type: string, format: date-time }
+    ActionDetail:
+      allOf:
+        - $ref: '#/components/schemas/ActionSummary'
+        - type: object
+          required: [description, sourceContext, events, attachments]
+          properties:
+            description: { type: [string, 'null'] }
+            sourceContext: { type: array, items: { type: object } }
+            events: { type: array, items: { type: object } }
+            attachments: { type: array, items: { type: object } }
+    CreateAction:
+      type: object
+      additionalProperties: false
+      required: [title, description, deadlineKind, deadlineDate, deadlineAt, idempotencyKey]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        deadlineKind: { type: string, enum: [UNKNOWN, DATE_ONLY, EXACT_DATETIME] }
+        deadlineDate: { type: [string, 'null'], format: date }
+        deadlineAt: { type: [string, 'null'], format: date-time }
+        idempotencyKey: { type: string, format: uuid }
+    DetectionEdit:
+      type: object
+      required:
+        [
+          title,
+          assigneeId,
+          deadlineKind,
+          deadlineAt,
+          deadlineDate,
+          deadlineDependency,
+          deadlineRaw,
+          expectedResultType,
+          expectedResultText,
+          location,
+        ]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        assigneeId: { type: string, format: uuid }
+        deadlineKind: { $ref: '#/components/schemas/DeadlineKind' }
+        deadlineAt: { type: [string, 'null'], format: date-time }
+        deadlineDate: { type: [string, 'null'], format: date }
+        deadlineDependency: { type: [string, 'null'], maxLength: 500 }
+        deadlineRaw: { type: [string, 'null'], maxLength: 500 }
+        expectedResultType: { $ref: '#/components/schemas/ExpectedResultType' }
+        expectedResultText: { type: [string, 'null'], maxLength: 1000 }
+        location: { type: [string, 'null'], maxLength: 500 }
+    Detection:
+      allOf:
+        - $ref: '#/components/schemas/DetectionEdit'
+        - type: object
+          required: [id, status, members]
+          properties:
+            id: { type: string, format: uuid }
+            assigneeId: { type: [string, 'null'], format: uuid }
+            status: { type: string, enum: [PENDING, ACCEPTED, REJECTED, EXPIRED] }
+            members:
+              type: array
+              items: { $ref: '#/components/schemas/UserSummary' }
+    IdempotencyBody:
+      type: object
+      required: [idempotencyKey]
+      properties:
+        idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
+security:
+  - sessionCookie: []
