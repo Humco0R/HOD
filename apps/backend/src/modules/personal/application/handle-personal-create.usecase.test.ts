@@ -37,7 +37,10 @@ describe('HandlePersonalCreateUseCase', () => {
     expect(harness.lastNotification().screen).toEqual({ key: draftId, replacePrevious: true });
     await harness.useCase.handle(callback(`hod:personal:create:skip-description:${draftId}`));
     expect(harness.session()?.step).toBe('DEADLINE');
+    expect(harness.lastNotification().screen).toEqual({ key: draftId, replacePrevious: false });
     await harness.useCase.handle(callback(`hod:personal:create:date:${draftId}`));
+    expect(harness.session()?.step).toBe('DEADLINE_DATE');
+    expect(harness.lastNotification().screen).toEqual({ key: draftId, replacePrevious: false });
     await harness.useCase.handle(message('25.09.2026'));
     expect(harness.session()?.step).toBe('REVIEW');
     expect(harness.lastNotification().text).toContain('25.09.2026');
@@ -47,6 +50,8 @@ describe('HandlePersonalCreateUseCase', () => {
     expect(harness.create).not.toHaveBeenCalled();
 
     await harness.useCase.handle(callback(`hod:personal:create:confirm:${draftId}`));
+    expect(harness.lastNotification().text).toContain('✅ Дело создано');
+    expect(harness.lastNotification().screen).toBeUndefined();
     expect(harness.create).toHaveBeenCalledWith({
       id: draftId,
       workspaceId: 'workspace-42',

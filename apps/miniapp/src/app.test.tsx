@@ -180,7 +180,24 @@ describe('Mini App', () => {
       ...action,
       description: null,
       sourceContext: [],
-      events: [],
+      events: [
+        {
+          id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          type: 'RESULT_SUBMITTED',
+          fromStatus: 'IN_PROGRESS',
+          toStatus: 'DONE',
+          reason: 'Работа выполнена, добавил подтверждение.',
+          createdAt: '2026-09-20T09:58:00.000Z',
+        },
+        {
+          id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          type: 'ACTION_STARTED',
+          fromStatus: 'ACCEPTED',
+          toStatus: 'IN_PROGRESS',
+          reason: null,
+          createdAt: '2026-09-20T08:00:00.000Z',
+        },
+      ],
       attachments: [
         {
           id: '99999999-9999-4999-8999-999999999999',
@@ -215,6 +232,9 @@ describe('Mini App', () => {
 
     const preview = await screen.findByRole('img', { name: 'result.jpg' });
     expect(preview).toHaveAttribute('src', detail.attachments[0]!.downloadUrl);
+    expect(screen.getByRole('heading', { name: 'Комментарии' })).toBeInTheDocument();
+    expect(screen.getByText('Работа выполнена, добавил подтверждение.')).toBeInTheDocument();
+    expect(screen.getByText(/Комментарий исполнителя/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Открыть фото/ }));
     const viewer = screen.getByRole('dialog', { name: 'Просмотр result.jpg' });
     expect(within(viewer).getByRole('img', { name: 'result.jpg' })).toBeInTheDocument();

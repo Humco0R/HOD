@@ -54,8 +54,28 @@ const allowedMimeTypes = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/heic',
+  'image/heif',
   'application/pdf',
   'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+const mimeTypeByExtension = new Map([
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['png', 'image/png'],
+  ['webp', 'image/webp'],
+  ['heic', 'image/heic'],
+  ['heif', 'image/heif'],
+  ['pdf', 'application/pdf'],
+  ['txt', 'text/plain'],
+  ['doc', 'application/msword'],
+  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['xls', 'application/vnd.ms-excel'],
+  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
 ]);
 
 export function registerMiniAppApi(
@@ -348,7 +368,8 @@ export function registerMiniAppApi(
     if (!context) throw app.httpErrors.forbidden('Proof upload is not allowed for this action');
     const part = await request.file();
     if (!part) throw app.httpErrors.badRequest('Proof file is required');
-    if (!allowedMimeTypes.has(part.mimetype)) {
+    const mimeType = resolveProofMimeType(part.filename, part.mimetype);
+    if (!mimeType) {
       throw app.httpErrors.unsupportedMediaType('Unsupported proof file type');
     }
     const content = await part.toBuffer();
@@ -365,7 +386,7 @@ export function registerMiniAppApi(
         context,
         ...stored,
         originalName: sanitizeFilename(part.filename),
-        mimeType: part.mimetype,
+        mimeType,
       });
       return replyCreated(attachment.id);
     } catch (error) {
@@ -411,6 +432,14 @@ function sanitizeFilename(value: string): string {
     .join('')
     .trim();
   return filename.slice(0, 255) || 'proof';
+}
+
+function resolveProofMimeType(filename: string, reportedMimeType: string): string | null {
+  const normalized = reportedMimeType.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (allowedMimeTypes.has(normalized)) return normalized;
+  if (normalized && normalized !== 'application/octet-stream') return null;
+  const extension = filename.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+  return extension ? (mimeTypeByExtension.get(extension) ?? null) : null;
 }
 
 function replyCreated(id: string): { id: string } {
