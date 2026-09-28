@@ -185,7 +185,7 @@ PostgreSQL хранит доменное состояние, audit, detection, a
 - Бот не видит сообщения группы: выдайте ему административное право `read_all_messages`.
 - Mini App не авторизуется: проверьте токен бота, свежесть `initData`, `MINIAPP_ORIGIN` и членство пользователя.
 - GigaChat не отвечает: проверьте scope, credentials, CA bundle, модель и timeout командой `npm.cmd run test:gigachat`.
-- Файл не загружается: допустимы JPEG, PNG, WebP, PDF и text/plain, размер до `PROOF_MAX_BYTES`.
+- Файл не загружается: допустимы JPEG, PNG, WebP, HEIC/HEIF, PDF, TXT, DOC/DOCX и XLS/XLSX, размер до `PROOF_MAX_BYTES`; мобильный `application/octet-stream` распознаётся только по разрешённому расширению.
 - Proof не скачивается в MAX: требуется публичный HTTPS URL и поддержка `window.WebApp.downloadFile`; отдельно проверьте mobile и web clients.
 - `npm` в PowerShell блокируется policy: используйте `npm.cmd`.
 - integration tests отказываются запускаться: задайте отдельную `hod_test`, не `hod` и не `postgres`.

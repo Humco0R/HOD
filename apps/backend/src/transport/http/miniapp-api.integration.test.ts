@@ -253,6 +253,33 @@ describe('Mini App API', () => {
     expect(uploaded.statusCode).toBe(200);
     const attachmentId = uploaded.json<{ id: string }>().id;
 
+    const mobileBoundary = 'hod-mobile-proof-boundary';
+    const mobileUploaded = await app.inject({
+      method: 'POST',
+      url: `/api/actions/${seed.actionId}/attachments`,
+      headers: {
+        cookie: assigneeCookie,
+        origin: 'https://miniapp.example.test',
+        'content-type': `multipart/form-data; boundary=${mobileBoundary}`,
+      },
+      payload: multipart(mobileBoundary, 'result.HEIC', 'application/octet-stream', 'heic-data'),
+    });
+    expect(mobileUploaded.statusCode).toBe(200);
+    const mobileAttachmentId = mobileUploaded.json<{ id: string }>().id;
+
+    const unsupportedBoundary = 'hod-unsupported-proof-boundary';
+    const unsupported = await app.inject({
+      method: 'POST',
+      url: `/api/actions/${seed.actionId}/attachments`,
+      headers: {
+        cookie: assigneeCookie,
+        origin: 'https://miniapp.example.test',
+        'content-type': `multipart/form-data; boundary=${unsupportedBoundary}`,
+      },
+      payload: multipart(unsupportedBoundary, 'program.exe', 'application/octet-stream', 'binary'),
+    });
+    expect(unsupported.statusCode).toBe(415);
+
     const submitted = await transition(seed.actionId, assigneeCookie, 'SUBMIT_RESULT');
     expect(submitted.json()).toMatchObject({ status: 'DONE' });
 
@@ -283,10 +310,14 @@ describe('Mini App API', () => {
       headers: { cookie: creatorCookie },
     });
     expect(detail.statusCode).toBe(200);
-    expect(detail.json()).toMatchObject({
-      status: 'VERIFIED',
-      attachments: [{ id: attachmentId }],
-    });
+    const detailBody = detail.json<{ status: string; attachments: Array<{ id: string }> }>();
+    expect(detailBody.status).toBe('VERIFIED');
+    expect(detailBody.attachments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: attachmentId }),
+        expect.objectContaining({ id: mobileAttachmentId }),
+      ]),
+    );
   });
 
   it('invalidates an existing session when the user loses all active memberships', async () => {
