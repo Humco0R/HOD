@@ -422,6 +422,24 @@ button.attachment-button.image-attachment {
 .image-attachment span {
   padding: 0 12px 12px;
 }
+.comment-list {
+  display: grid;
+  gap: 10px;
+}
+.result-comment {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+.result-comment p {
+  margin: 0 0 7px;
+  white-space: pre-wrap;
+}
+.result-comment span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
 .photo-viewer {
   position: fixed;
   z-index: 50;

@@ -201,6 +201,37 @@ describe('MAX webhook', () => {
     expect(deletedMessageId).toBe('message-1');
   });
 
+  it.each([
+    'hod:personal:create',
+    'hod:personal:create:skip-description:11111111-1111-4111-8111-111111111111',
+    'hod:personal:create:date:11111111-1111-4111-8111-111111111111',
+    'hod:personal:create:no-deadline:11111111-1111-4111-8111-111111111111',
+    'hod:personal:create:confirm:11111111-1111-4111-8111-111111111111',
+    'hod:personal:action:detail:22222222-2222-4222-8222-222222222222',
+  ])('removes the pressed bot screen throughout personal creation: %s', async (payload) => {
+    const handle = vi.fn<InboundChatEventHandler['handle']>().mockResolvedValue(undefined);
+    const acknowledge = vi.fn().mockResolvedValue({ success: true });
+    const remove = vi.fn().mockResolvedValue({ success: true });
+    const app = createApp({ handle }, (router) => {
+      vi.spyOn(router.bot.api, 'answerOnCallback').mockImplementation(acknowledge);
+      vi.spyOn(router.bot.api, 'deleteMessage').mockImplementation(remove);
+    });
+    const update = callbackUpdate('dialog');
+    update.callback.payload = payload;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/max/webhook',
+      headers: { 'x-max-bot-api-secret': 'secret_123' },
+      payload: update,
+    });
+
+    expect(response.json()).toEqual({ ok: true, result: 'processed' });
+    expect(handle).toHaveBeenCalledOnce();
+    expect(acknowledge).toHaveBeenCalledExactlyOnceWith('callback-dialog');
+    expect(remove).toHaveBeenCalledExactlyOnceWith('message-1');
+  });
+
   it('preserves the group id and removes the previous bot message', async () => {
     const handle = vi.fn<InboundChatEventHandler['handle']>().mockResolvedValue(undefined);
     const acknowledge = vi.fn().mockResolvedValue({ success: true });

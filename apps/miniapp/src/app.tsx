@@ -425,6 +425,12 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
   const action = query.data;
   const isAssignee = action.assignee.id === me.id;
   const isCreator = action.creator.id === me.id;
+  const comments = ['DONE', 'VERIFIED'].includes(action.status)
+    ? action.events.flatMap((event) => {
+        const text = event.reason?.trim();
+        return text ? [{ ...event, text }] : [];
+      })
+    : [];
   return (
     <article className="detail">
       <Link className="back-link" to="/actions">
@@ -494,6 +500,20 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
           {download.isError && <p className="form-error">{errorMessage(download.error)}</p>}
         </DetailSection>
       )}
+      {comments.length > 0 && (
+        <DetailSection title="Комментарии">
+          <div className="comment-list">
+            {comments.map((comment) => (
+              <article className="result-comment" key={comment.id}>
+                <p>{comment.text}</p>
+                <span>
+                  {eventCommentLabel(comment.type)} · {formatEventDate(comment.createdAt)}
+                </span>
+              </article>
+            ))}
+          </div>
+        </DetailSection>
+      )}
       {photoPreview && (
         <div
           className="photo-viewer"
@@ -528,11 +548,11 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
           >
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf,text/plain"
+              accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.pdf,.txt,.doc,.docx,.xls,.xlsx,image/jpeg,image/png,image/webp,image/heic,image/heif"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
             <button className="secondary" disabled={!file || upload.isPending}>
-              Загрузить файл
+              {upload.isPending ? 'Загружаем…' : 'Загрузить файл'}
             </button>
           </form>
           {upload.isError && <p className="form-error">{errorMessage(upload.error)}</p>}
@@ -979,6 +999,20 @@ function resultLabel(action: ActionDetail): string {
       } as const
     )[action.expectedResultType]
   );
+}
+
+function eventCommentLabel(type: string): string {
+  if (type === 'RESULT_SUBMITTED') return 'Комментарий исполнителя';
+  if (type === 'RESULT_REJECTED') return 'Комментарий постановщика';
+  if (type === 'ACTION_BLOCKED') return 'Причина блокировки';
+  return 'Комментарий';
+}
+
+function formatEventDate(value: string): string {
+  return new Intl.DateTimeFormat('ru', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 function saveAttachment(content: Blob, originalName: string): void {
