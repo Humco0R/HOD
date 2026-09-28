@@ -100,6 +100,14 @@ export async function uploadProof(id: string, file: File) {
   return request<{ id: string }>(`/api/actions/${id}/attachments`, { method: 'POST', body });
 }
 
+export async function fetchAttachment(downloadUrl: string): Promise<Blob> {
+  const response = await fetch(downloadUrl, { credentials: 'include' });
+  if (!response.ok) {
+    throw new ApiError(`Не удалось скачать файл: HTTP ${String(response.status)}`, response.status);
+  }
+  return response.blob();
+}
+
 export async function getDetection(id: string) {
   return request<DetectionDetail>(`/api/detections/${id}`);
 }

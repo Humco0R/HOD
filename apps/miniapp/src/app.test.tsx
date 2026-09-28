@@ -1,17 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActionDetail, ActionSummary } from '@hod/contracts';
 
 import { App, ActionCard } from './app';
-import { createAction, ensureSession, getAction, listActions } from './api';
+import { createAction, ensureSession, fetchAttachment, getAction, listActions } from './api';
 
 vi.mock('./api', () => ({
   ensureSession: vi.fn(),
   listActions: vi.fn(),
   createAction: vi.fn(),
+  fetchAttachment: vi.fn(),
   getAction: vi.fn(),
   transitionAction: vi.fn(),
   uploadProof: vi.fn(),
@@ -66,14 +67,14 @@ beforeEach(() => {
 });
 
 describe('Mini App', () => {
-  it('shows a server-authorized assigned list and the three MVP navigation views', async () => {
+  it('shows a server-authorized assigned list and the primary navigation views', async () => {
     renderWithClient(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Мои дела' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: action.title })).toBeInTheDocument();
     expect(screen.getByText('Нужна проверка')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'От меня' })).toHaveAttribute('href', '/created');
-    expect(screen.getByRole('link', { name: 'Команда' })).toHaveAttribute('href', '/team');
+    expect(screen.queryByRole('link', { name: 'Команда' })).not.toBeInTheDocument();
     expect(ensureSession).toHaveBeenCalledOnce();
     expect(listActions).toHaveBeenCalledWith('assigned');
   });
@@ -174,7 +175,7 @@ describe('Mini App', () => {
     expect(screen.getByText('1 из 1')).toBeInTheDocument();
   });
 
-  it('shows uploaded photos inline and keeps a link to the original', async () => {
+  it('opens photos in-app, downloads files and hides an empty action panel', async () => {
     const detail: ActionDetail = {
       ...action,
       description: null,
@@ -189,18 +190,49 @@ describe('Mini App', () => {
           downloadUrl: '/api/attachments/99999999-9999-4999-8999-999999999999',
           createdAt: '2026-09-20T10:00:00.000Z',
         },
+        {
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          originalName: 'FIXED.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 32,
+          downloadUrl: '/api/attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          createdAt: '2026-09-20T10:01:00.000Z',
+        },
       ],
     };
     vi.mocked(getAction).mockResolvedValue(detail);
+    vi.mocked(fetchAttachment).mockResolvedValue(new Blob(['fixed']));
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fixed');
+    const revokeObjectUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    let downloadedName = '';
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloadedName = this.download;
+    });
 
     renderWithClient(<App />, `/actions/${action.id}`);
 
     const preview = await screen.findByRole('img', { name: 'result.jpg' });
     expect(preview).toHaveAttribute('src', detail.attachments[0]!.downloadUrl);
-    expect(screen.getByRole('link', { name: /Открыть фото/ })).toHaveAttribute(
-      'href',
-      detail.attachments[0]!.downloadUrl,
+    fireEvent.click(screen.getByRole('button', { name: /Открыть фото/ }));
+    const viewer = screen.getByRole('dialog', { name: 'Просмотр result.jpg' });
+    expect(within(viewer).getByRole('img', { name: 'result.jpg' })).toBeInTheDocument();
+    fireEvent.click(within(viewer).getByRole('button', { name: 'Закрыть фото' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'FIXED.txt' }));
+    await waitFor(() =>
+      expect(fetchAttachment).toHaveBeenCalledWith(detail.attachments[1]!.downloadUrl),
     );
+    expect(createObjectUrl).toHaveBeenCalledOnce();
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:fixed');
+    expect(downloadedName).toBe('FIXED.txt');
+    expect(screen.queryByRole('region', { name: 'Действия с делом' })).not.toBeInTheDocument();
+
+    click.mockRestore();
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
   });
 });
 

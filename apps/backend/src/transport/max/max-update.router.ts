@@ -1,4 +1,4 @@
-import { Bot, Context, Keyboard } from '@maxhub/max-bot-api';
+import { Bot, Context } from '@maxhub/max-bot-api';
 import type { Update } from '@maxhub/max-bot-api/types';
 import type { Logger } from 'pino';
 
@@ -116,21 +116,8 @@ export class MaxUpdateRouter {
       if (isPersonalDialog || !update.callback.payload?.startsWith('hod:personal:')) {
         await this.handler.handle(normalize(update));
       }
-      const status = callbackAcknowledgementText(update);
-      const originalText = update.message?.body?.text?.trim();
       try {
-        const result = await context.answerOnCallback({
-          message: isPersonalDialog
-            ? {
-                text: originalText ? `${status}\n\n${originalText}` : status,
-                attachments: [
-                  Keyboard.inlineKeyboard([
-                    [Keyboard.button.callback('🏠 Главное меню', 'hod:personal:menu')],
-                  ]),
-                ],
-              }
-            : { text: originalText || status, attachments: [] },
-        });
+        const result = await this.bot.api.answerOnCallback(update.callback.callback_id);
         if (!result.success) this.logger?.warn('Failed to acknowledge MAX callback');
       } catch (error) {
         this.logger?.warn({ err: toSafeErrorLog(error) }, 'Failed to acknowledge MAX callback');
@@ -153,23 +140,6 @@ export class MaxUpdateRouter {
       }
     });
   }
-}
-
-function callbackAcknowledgementText(
-  update: Extract<SupportedMaxUpdate, { update_type: 'message_callback' }>,
-): string {
-  const statusByOperation: Record<string, string> = {
-    'detection:confirm': '✅ Поручение создано',
-    'detection:reject': 'Отклонено',
-    'action:accept': '✅ Поручение принято',
-    'action:start': '▶️ Работа начата',
-    'action:submit': '📝 Подготовка результата',
-    'action:verify': '✅ Результат принят',
-    'action:cancel': '🗑 Дело удалено',
-  };
-  const operation = update.callback.payload?.match(/^hod:([^:]+:[^:]+):/)?.[1];
-  const status = operation ? statusByOperation[operation] : undefined;
-  return status ?? '✅ Готово';
 }
 
 function isSupportedType(value: string): boolean {

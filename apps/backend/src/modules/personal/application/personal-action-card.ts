@@ -101,7 +101,7 @@ export function buildActionButtons(
   }
 
   buttons.push({
-    text: listReturn ? '⬅️ Назад' : '📋 Все дела',
+    text: '⬅️ Назад',
     payload: listReturn ?? 'hod:personal:actions',
     row: buttons.length,
   });
