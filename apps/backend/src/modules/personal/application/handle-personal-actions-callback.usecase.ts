@@ -17,7 +17,7 @@ import {
 } from './personal-action-card';
 import { PersonalActionDeadlineCallbacks } from './personal-action-deadline-callbacks';
 import { PersonalActionEditCallbacks } from './personal-action-edit-callbacks';
-import { personalMainMenu } from './personal-main-menu';
+import { personalHelpText, personalMainMenu } from './personal-main-menu';
 
 const detailPattern =
   /^hod:personal:action:detail:([0-9a-f-]{36})(?::(?:(received|given):)?(active|today|overdue|completed):(\d{1,4}))?$/i;
@@ -88,11 +88,7 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
       await this.notifications.publish(
         {
           target: { type: 'USER', externalId: event.actor.externalUserId },
-          text: `Как пользоваться ХОД:
-
-1. Нажми «Создать дело» и заполни его в чате или перешли мне сообщение с задачей.
-2. Проверь карточку и подтверди создание кнопкой.
-3. Открой «Мои дела», чтобы следить за работой.`,
+          text: personalHelpText,
           buttons: [{ text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 0 }],
         },
         `personal-help-${event.callbackId}`,

@@ -17,6 +17,9 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
 
     await harness.useCase.handle(callbackEvent('hod:personal:help'));
     expect(harness.publish.mock.calls[0]?.[0].text).toContain('Создать дело');
+    expect(harness.publish.mock.calls[0]?.[0].text).toContain('Дай ХОД своему ДЕЛУ');
+    expect(harness.publish.mock.calls[0]?.[0].text).toContain('Добавь меня в чат');
+    expect(harness.publish.mock.calls[0]?.[0].text).toContain('Назначь администратором');
     expect(harness.publish.mock.calls[0]?.[0].buttons).toContainEqual({
       text: '🏠 Главное меню',
       payload: 'hod:personal:menu',

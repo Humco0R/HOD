@@ -1,5 +1,5 @@
 import type { InboundChatEvent, InboundChatEventHandler } from '../../workspaces';
-import type { NotificationPublisher, OutboundNotification } from '../../notifications';
+import type { NotificationPublisher } from '../../notifications';
 import type { AssignmentNotificationPort, DetectionRepository } from './detection.ports';
 
 const callbackPattern = /^hod:detection:(confirm|reject):([0-9a-f-]{36})$/i;
@@ -23,14 +23,12 @@ export class HandleDetectionCallbackUseCase implements InboundChatEventHandler {
         detectionId,
         actorExternalUserId: event.actor.externalUserId,
       });
-      if (this.notifications)
+      if (this.notifications && !event.externalChatId)
         await this.notifications.publish(
           {
-            target: responseTarget(event),
+            target: { type: 'USER', externalId: event.actor.externalUserId },
             text: 'Предложение отклонено.',
-            buttons: event.externalChatId
-              ? []
-              : [{ text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 0 }],
+            buttons: [{ text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 0 }],
           },
           `detection-rejected-${event.callbackId}`,
         );
@@ -50,33 +48,23 @@ export class HandleDetectionCallbackUseCase implements InboundChatEventHandler {
         title: result.title,
       });
     }
-    if (this.notifications)
+    if (this.notifications && !event.externalChatId)
       await this.notifications.publish(
         {
-          target: responseTarget(event),
+          target: { type: 'USER', externalId: event.actor.externalUserId },
           text: `✅ Дело создано\n\n${result.title}`,
-          buttons: event.externalChatId
-            ? []
-            : [
-                {
-                  text: '📄 Открыть дело',
-                  payload: `hod:personal:action:detail:${result.actionId}`,
-                  row: 0,
-                },
-                { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 1 },
-              ],
+          buttons: [
+            {
+              text: '📄 Открыть дело',
+              payload: `hod:personal:action:detail:${result.actionId}`,
+              row: 0,
+            },
+            { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 1 },
+          ],
         },
         `detection-confirmed-${event.callbackId}`,
       );
   }
-}
-
-function responseTarget(
-  event: Extract<InboundChatEvent, { kind: 'message.callback' }>,
-): OutboundNotification['target'] {
-  return event.externalChatId
-    ? { type: 'CHAT', externalId: event.externalChatId }
-    : { type: 'USER', externalId: event.actor.externalUserId };
 }
 
 export class CompositeInboundChatEventHandler implements InboundChatEventHandler {
