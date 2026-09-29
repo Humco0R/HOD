@@ -22,8 +22,10 @@ import {
   DrizzleActionContextStore,
   DrizzleActionCreateRepository,
   DrizzleActionLifecycleStore,
+  DrizzlePendingActionInbox,
   DrizzleActionReadRepository,
   QueueActionLifecycleNotifications,
+  RedisPendingActionInboxSessionStore,
   TransitionActionUseCase,
   TransitionActionWithNotificationUseCase,
 } from '../../modules/actions';
@@ -91,20 +93,24 @@ export function registerMiniAppApi(
   const sessions = new MiniAppSessionService(database, redis, config.MINIAPP_SESSION_TTL_SECONDS);
   const personalWorkspaces = new DrizzlePersonalWorkspaceStore(database);
   const reads = new DrizzleActionReadRepository(database);
+  const notificationPublisher = new BullMqNotificationPublisher(queues.notification);
+  const pendingInbox = new DrizzlePendingActionInbox(
+    database,
+    notificationPublisher,
+    new RedisPendingActionInboxSessionStore(redis),
+  );
   const actionCreator = new DrizzleActionCreateRepository(database);
   const contexts = new DrizzleActionContextStore(database);
   const transitions = new TransitionActionWithNotificationUseCase(
     new TransitionActionUseCase(new DrizzleActionLifecycleStore(database)),
     contexts,
-    new QueueActionLifecycleNotifications(new BullMqNotificationPublisher(queues.notification)),
+    new QueueActionLifecycleNotifications(notificationPublisher, pendingInbox),
   );
   const attachmentStore = new DrizzleAttachmentStore(database);
   const proofStorage = new LocalProofStorage(config.PROOF_STORAGE_PATH);
   const detectionManagement = new DrizzleDetectionManagementStore(database);
   const detectionRepository = new DrizzleDetectionRepository(database);
-  const detectionMessaging = new BullMqDetectionMessaging(
-    new BullMqNotificationPublisher(queues.notification),
-  );
+  const detectionMessaging = new BullMqDetectionMessaging(notificationPublisher, pendingInbox);
 
   const requireSession = async (request: FastifyRequest): Promise<MiniAppSession> => {
     const session = await sessions.get(request.cookies[SESSION_COOKIE]);

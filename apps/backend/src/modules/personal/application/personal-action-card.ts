@@ -31,6 +31,11 @@ export function buildActionButtons(
       payload: `hod:action:accept:${action.id}`,
       row: buttons.length,
     });
+    buttons.push({
+      text: '❌ Отклонить',
+      payload: `hod:action:reject:${action.id}`,
+      row: buttons.length,
+    });
   }
 
   if (action.status === 'ACCEPTED' && action.assignee.id === currentUserId) {
@@ -163,6 +168,9 @@ export function formatStatus(status: ActionSummary['status']): string {
 
     case 'VERIFIED':
       return '✔️ Завершено';
+
+    case 'REJECTED':
+      return '❌ Отклонено';
 
     case 'CANCELLED':
       return '🗑 Удалено';

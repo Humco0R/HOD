@@ -158,6 +158,28 @@ describe('MaxNotificationGateway', () => {
     expect(replace).toHaveBeenNthCalledWith(2, '42', 'draft-1', 'next-prompt');
     expect(remove).toHaveBeenCalledExactlyOnceWith('previous-prompt');
   });
+
+  it('stores the revision of the message that was actually delivered', async () => {
+    const replace = vi.fn<MaxScreenStore['replace']>().mockResolvedValue(null);
+    const harness = createHarness('application/pdf', undefined, { replace });
+    harness.send.mockResolvedValue({ body: { mid: 'pending-message' } } as Awaited<
+      ReturnType<Bot['api']['sendMessageToUser']>
+    >);
+
+    await harness.gateway.send({
+      target: { type: 'USER', externalId: '42' },
+      text: 'Непринятые дела',
+      buttons: [],
+      screen: { key: 'pending-actions', replacePrevious: true, revision: '0123456789abcdef' },
+    });
+
+    expect(replace).toHaveBeenCalledWith(
+      '42',
+      'pending-actions',
+      'pending-message',
+      '0123456789abcdef',
+    );
+  });
 });
 
 function homeKeyboard() {

@@ -179,7 +179,10 @@ function getAttentionReasons(
 ): ActionSummary['attentionReasons'] {
   const reasons: ActionSummary['attentionReasons'] = [];
   const terminal =
-    action.status === 'DONE' || action.status === 'VERIFIED' || action.status === 'CANCELLED';
+    action.status === 'DONE' ||
+    action.status === 'VERIFIED' ||
+    action.status === 'REJECTED' ||
+    action.status === 'CANCELLED';
   const localToday = formatDate(now, timezone);
   const deadlineDate = action.deadlineAt
     ? formatDate(action.deadlineAt, timezone)

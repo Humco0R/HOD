@@ -16,6 +16,7 @@ const cases: Array<{
   reason?: string;
 }> = [
   { command: 'ACCEPT', from: 'NEW', to: 'ACCEPTED', actor: assignee },
+  { command: 'REJECT', from: 'NEW', to: 'REJECTED', actor: assignee },
   { command: 'START', from: 'ACCEPTED', to: 'IN_PROGRESS', actor: assignee },
   {
     command: 'BLOCK',

@@ -88,4 +88,49 @@ describe('QueueActionLifecycleNotifications', () => {
     );
     expect(buttons?.some((button) => 'startParam' in button)).toBe(false);
   });
+
+  it('notifies the creator and refreshes the assignee inbox after rejection', async () => {
+    const publish = vi.fn<NotificationPublisher['publish']>(() => Promise.resolve());
+    const refresh = vi.fn(() => Promise.resolve());
+    const notifications = new QueueActionLifecycleNotifications({ publish }, { refresh });
+
+    await notifications.publish({
+      context: {
+        actionId: '00000000-0000-4000-8000-000000000001',
+        title: 'Проверить договор',
+        status: 'REJECTED',
+        creatorExternalUserId: '42',
+        assigneeExternalUserId: '43',
+      },
+      command: 'REJECT',
+      reason: null,
+      idempotencyKey: 'reject-1',
+    });
+
+    expect(publish.mock.lastCall?.[0].target).toEqual({ type: 'USER', externalId: '42' });
+    expect(publish.mock.lastCall?.[0].text).toContain('Дело отклонено исполнителем');
+    expect(refresh).toHaveBeenCalledWith('43', 'reject-1');
+  });
+
+  it('replaces an accepted assignment with the remaining inbox', async () => {
+    const publish = vi.fn<NotificationPublisher['publish']>(() => Promise.resolve());
+    const refresh = vi.fn(() => Promise.resolve());
+    const notifications = new QueueActionLifecycleNotifications({ publish }, { refresh });
+
+    await notifications.publish({
+      context: {
+        actionId: '00000000-0000-4000-8000-000000000001',
+        title: 'Проверить договор',
+        status: 'ACCEPTED',
+        creatorExternalUserId: '42',
+        assigneeExternalUserId: '43',
+      },
+      command: 'ACCEPT',
+      reason: null,
+      idempotencyKey: 'accept-1',
+    });
+
+    expect(publish).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledWith('43', 'accept-1');
+  });
 });

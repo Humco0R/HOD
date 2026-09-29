@@ -1,4 +1,9 @@
-import type { ActionContextStore, ActionEditPort, ActionReadPort } from '../../actions';
+import type {
+  ActionContextStore,
+  ActionEditPort,
+  ActionReadPort,
+  PendingActionInboxViewPort,
+} from '../../actions';
 import type { NotificationPublisher } from '../../notifications';
 import type { InboundChatEvent, InboundChatEventHandler } from '../../workspaces';
 
@@ -55,6 +60,7 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
     private readonly editSessions: PersonalActionEditSessionStore,
     private readonly contexts: ActionContextStore,
     private readonly defaultTimezone: string,
+    private readonly pendingInbox?: PendingActionInboxViewPort,
   ) {
     this.editCallbacks = new PersonalActionEditCallbacks(
       store,
@@ -244,6 +250,21 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
         `personal-action-not-found-${event.callbackId}`,
       );
 
+      return;
+    }
+
+    if (
+      this.pendingInbox &&
+      target.type === 'USER' &&
+      action.status === 'NEW' &&
+      action.assignee.id === viewerId
+    ) {
+      await this.pendingInbox.showDetail(
+        externalUserId,
+        action.id,
+        0,
+        `personal-action-pending-${event.callbackId}`,
+      );
       return;
     }
 

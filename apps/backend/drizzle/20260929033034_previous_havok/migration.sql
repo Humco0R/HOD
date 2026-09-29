@@ -1,0 +1,2 @@
+ALTER TYPE "action_event_type" ADD VALUE 'ACTION_REJECTED' BEFORE 'ACTION_CANCELLED';--> statement-breakpoint
+ALTER TYPE "action_status" ADD VALUE 'REJECTED' BEFORE 'CANCELLED';

@@ -3,15 +3,33 @@ import type {
   ActionLifecycleNotificationPort,
   ActionReminderNotificationPort,
 } from '../application/action-context.port';
+import type { PendingActionInboxPort } from '../application/pending-action-inbox.port';
 
 export class QueueActionLifecycleNotifications implements ActionLifecycleNotificationPort {
-  constructor(private readonly notifications: NotificationPublisher) {}
+  constructor(
+    private readonly notifications: NotificationPublisher,
+    private readonly pendingInbox?: PendingActionInboxPort,
+  ) {}
 
   async publish(input: Parameters<ActionLifecycleNotificationPort['publish']>[0]): Promise<void> {
     if (
       input.context.creatorExternalUserId === input.context.assigneeExternalUserId &&
       (input.command === 'SUBMIT_RESULT' || input.command === 'VERIFY')
     ) {
+      return;
+    }
+    if (input.command === 'REJECT' && this.pendingInbox) {
+      if (input.context.creatorExternalUserId !== input.context.assigneeExternalUserId) {
+        await this.notifications.publish(
+          renderNotification(input),
+          `${input.idempotencyKey}:creator`,
+        );
+      }
+      await this.pendingInbox.refresh(input.context.assigneeExternalUserId, input.idempotencyKey);
+      return;
+    }
+    if (input.command === 'ACCEPT' && this.pendingInbox) {
+      await this.pendingInbox.refresh(input.context.assigneeExternalUserId, input.idempotencyKey);
       return;
     }
     await this.notifications.publish(renderNotification(input), input.idempotencyKey);
@@ -92,6 +110,8 @@ function renderNotification(
         `Дело возвращено в работу\n\n${context.title}\nПричина: ${reason ?? ''}`,
         [{ text: '📄 Открыть дело', payload: `hod:personal:action:detail:${context.actionId}` }],
       );
+    case 'REJECT':
+      return toCreator(context, `Дело отклонено исполнителем\n\n${context.title}`);
     case 'CANCEL':
       return toAssignee(context, `Дело удалено постановщиком\n\n${context.title}`);
   }

@@ -32,6 +32,7 @@ const statusLabels: Record<ActionSummary['status'], string> = {
   BLOCKED: 'Заблокирована',
   DONE: 'На проверке',
   VERIFIED: 'Завершена',
+  REJECTED: 'Отклонена',
   CANCELLED: 'Удалена',
 };
 const attentionLabels: Record<ActionSummary['attentionReasons'][number], string> = {
@@ -609,9 +610,14 @@ function ActionControls({
       )}
       <div className="button-row">
         {isAssignee && action.status === 'NEW' && (
-          <button disabled={pending} onClick={() => run('ACCEPT')}>
-            Принять
-          </button>
+          <>
+            <button className="secondary" disabled={pending} onClick={() => run('REJECT')}>
+              Отклонить
+            </button>
+            <button disabled={pending} onClick={() => run('ACCEPT')}>
+              Принять
+            </button>
+          </>
         )}
         {isAssignee && action.status === 'ACCEPTED' && (
           <button disabled={pending} onClick={() => run('START')}>
@@ -924,13 +930,13 @@ function matchesCategory(action: ActionSummary, category: ActionCategory): boole
     case 'all':
       return true;
     case 'active':
-      return action.status !== 'DONE' && action.status !== 'VERIFIED';
+      return !['DONE', 'VERIFIED', 'REJECTED'].includes(action.status);
     case 'today':
       return action.attentionReasons.includes('DUE_TODAY');
     case 'overdue':
       return action.attentionReasons.includes('OVERDUE');
     case 'completed':
-      return action.status === 'DONE' || action.status === 'VERIFIED';
+      return ['DONE', 'VERIFIED', 'REJECTED'].includes(action.status);
     case 'review':
       return action.status === 'DONE';
   }
