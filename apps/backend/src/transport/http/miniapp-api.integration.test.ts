@@ -253,6 +253,19 @@ describe('Mini App API', () => {
     expect(uploaded.statusCode).toBe(200);
     const attachmentId = uploaded.json<{ id: string }>().id;
 
+    const textUploaded = await app.inject({
+      method: 'POST',
+      url: `/api/actions/${seed.actionId}/attachments`,
+      headers: {
+        cookie: assigneeCookie,
+        origin: 'https://miniapp.example.test',
+        'content-type': 'multipart/form-data; boundary=hod-text-boundary',
+      },
+      payload: multipart('hod-text-boundary', 'proof.txt', 'text/plain', 'text-proof'),
+    });
+    expect(textUploaded.statusCode).toBe(200);
+    const textAttachmentId = textUploaded.json<{ id: string }>().id;
+
     const mobileBoundary = 'hod-mobile-proof-boundary';
     const mobileUploaded = await app.inject({
       method: 'POST',
@@ -292,6 +305,19 @@ describe('Mini App API', () => {
     expect(privateDownload.statusCode).toBe(404);
 
     const creatorCookie = await authenticate(601);
+    const forbiddenChatSend = await app.inject({
+      method: 'POST',
+      url: `/api/attachments/${textAttachmentId}/send-to-chat`,
+      headers: { cookie: outsiderCookie, origin: 'https://miniapp.example.test' },
+    });
+    expect(forbiddenChatSend.statusCode).toBe(404);
+    const sentToChat = await app.inject({
+      method: 'POST',
+      url: `/api/attachments/${textAttachmentId}/send-to-chat`,
+      headers: { cookie: creatorCookie, origin: 'https://miniapp.example.test' },
+    });
+    expect(sentToChat.statusCode).toBe(202);
+    expect(sentToChat.json()).toEqual({ queued: true });
     const download = await app.inject({
       method: 'GET',
       url: `/api/attachments/${attachmentId}`,
@@ -310,13 +336,20 @@ describe('Mini App API', () => {
       headers: { cookie: creatorCookie },
     });
     expect(detail.statusCode).toBe(200);
-    const detailBody = detail.json<{ status: string; attachments: Array<{ id: string }> }>();
+    const detailBody = detail.json<{
+      status: string;
+      attachments: Array<{ id: string; downloadUrl: string }>;
+    }>();
     expect(detailBody.status).toBe('VERIFIED');
     expect(detailBody.attachments).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: attachmentId }),
         expect.objectContaining({ id: mobileAttachmentId }),
+        expect.objectContaining({ id: textAttachmentId }),
       ]),
+    );
+    expect(detailBody.attachments.find(({ id }) => id === textAttachmentId)?.downloadUrl).toBe(
+      `/api/attachments/${textAttachmentId}`,
     );
   });
 

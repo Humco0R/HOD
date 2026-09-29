@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -415,6 +417,24 @@ export function registerMiniAppApi(
         `${disposition}; filename*=UTF-8''${encodeURIComponent(attachment.originalName)}`,
       )
       .send(content);
+  });
+
+  app.post('/api/attachments/:id/send-to-chat', async (request, reply) => {
+    const session = await requireSession(request);
+    assertMutationOrigin(request, config, app);
+    const { id } = idParamsSchema.parse(request.params);
+    const attachment = await attachmentStore.getForDownload(id, session.userId);
+    if (!attachment) throw app.httpErrors.notFound('Attachment not found');
+    await notificationPublisher.publish(
+      {
+        target: { type: 'USER', externalId: session.externalUserId },
+        text: `📎 ${attachment.originalName}`,
+        media: { attachmentId: id, requesterUserId: session.userId },
+        buttons: [],
+      },
+      `miniapp-attachment-${id}-${session.userId}-${randomUUID()}`,
+    );
+    return reply.code(202).send({ queued: true });
   });
 }
 

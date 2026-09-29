@@ -269,6 +269,25 @@ paths:
             text/plain: { schema: { type: string } }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/attachments/{id}/send-to-chat:
+    post:
+      tags: [Attachments]
+      summary: Queue an authorized attachment for delivery to the user's bot chat
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '202':
+          description: File delivery queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued]
+                properties:
+                  queued: { type: boolean }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/detections/{id}:
     get:
       tags: [Detections]
@@ -466,7 +485,17 @@ components:
             description: { type: [string, 'null'] }
             sourceContext: { type: array, items: { type: object } }
             events: { type: array, items: { type: object } }
-            attachments: { type: array, items: { type: object } }
+            attachments: { type: array, items: { $ref: '#/components/schemas/Attachment' } }
+    Attachment:
+      type: object
+      required: [id, originalName, mimeType, sizeBytes, downloadUrl, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        originalName: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer, minimum: 0 }
+        downloadUrl: { type: string }
+        createdAt: { type: string, format: date-time }
     CreateAction:
       type: object
       additionalProperties: false

@@ -12,6 +12,7 @@ import {
   fetchAttachment,
   getAction,
   listActions,
+  sendAttachmentToChat,
   transitionAction,
 } from './api';
 
@@ -21,6 +22,7 @@ vi.mock('./api', () => ({
   createAction: vi.fn(),
   fetchAttachment: vi.fn(),
   getAction: vi.fn(),
+  sendAttachmentToChat: vi.fn(),
   transitionAction: vi.fn(),
   uploadProof: vi.fn(),
   getDetection: vi.fn(),
@@ -266,9 +268,8 @@ describe('Mini App', () => {
     revokeObjectUrl.mockRestore();
   });
 
-  it('downloads files through MAX Bridge on a phone without using the browser fallback', async () => {
-    const downloadFile = vi.fn(() => Promise.resolve());
-    vi.stubGlobal('WebApp', { platform: 'ios', downloadFile });
+  it('sends a phone attachment to the bot without attempting a browser download', async () => {
+    vi.stubGlobal('WebApp', { platform: 'ios' });
     vi.mocked(getAction).mockResolvedValue({
       ...action,
       description: null,
@@ -288,18 +289,21 @@ describe('Mini App', () => {
 
     renderWithClient(<App />, `/actions/${action.id}`);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'FIXED.txt' }));
-
-    expect(downloadFile).toHaveBeenCalledWith(
-      new URL('/api/attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', window.location.origin).href,
-      'FIXED.txt',
-    );
+    expect(await screen.findByText('FIXED.txt')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'FIXED.txt' })).not.toBeInTheDocument();
     expect(fetchAttachment).not.toHaveBeenCalled();
+
+    vi.mocked(sendAttachmentToChat).mockResolvedValue();
+    fireEvent.click(screen.getByRole('button', { name: 'Посмотреть FIXED.txt в боте' }));
+    await waitFor(() =>
+      expect(sendAttachmentToChat).toHaveBeenCalledWith('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    );
+    expect(await screen.findByText(/Файл отправляется в чат с ботом/)).toBeInTheDocument();
   });
 
-  it('shows a mobile download failure instead of silently falling back', async () => {
-    const downloadFile = vi.fn(() => Promise.reject(new Error('Файл недоступен')));
-    vi.stubGlobal('WebApp', { platform: 'android', downloadFile });
+  it('shows an error if the bot cannot receive a phone attachment', async () => {
+    vi.stubGlobal('WebApp', { platform: 'android' });
+    vi.mocked(sendAttachmentToChat).mockRejectedValue(new Error('Файл недоступен'));
     vi.mocked(getAction).mockResolvedValue({
       ...action,
       description: null,
@@ -318,7 +322,7 @@ describe('Mini App', () => {
     });
 
     renderWithClient(<App />, `/actions/${action.id}`);
-    fireEvent.click(await screen.findByRole('button', { name: 'FIXED.txt' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Посмотреть FIXED.txt в боте' }));
 
     expect(await screen.findByText('Файл недоступен')).toBeInTheDocument();
     expect(fetchAttachment).not.toHaveBeenCalled();
