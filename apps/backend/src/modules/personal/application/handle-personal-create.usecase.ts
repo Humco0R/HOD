@@ -58,7 +58,18 @@ export class HandlePersonalCreateUseCase implements InboundChatEventHandler {
     if (!session || session.id !== match[2]) {
       if (match[1] === 'confirm') {
         const personal = await this.workspaces.findByExternalUserId(userId);
-        if (personal && (await this.actions.exists(match[2]!, personal.userId))) return;
+        if (personal && (await this.actions.exists(match[2]!, personal.userId))) {
+          await this.publish(
+            userId,
+            {
+              target: { type: 'USER', externalId: userId },
+              text: '✅ Дело уже создано. Найти его можно в «Моих делах».',
+              buttons: [{ text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 0 }],
+            },
+            event.eventId,
+          );
+          return;
+        }
       }
       await this.publish(
         userId,

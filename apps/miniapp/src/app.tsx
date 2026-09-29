@@ -378,6 +378,7 @@ export function ActionCard({ action }: { action: ActionSummary }) {
 
 function ActionDetailPage({ me }: { me: CurrentUser }) {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ['action', id],
@@ -396,12 +397,13 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
         idempotencyKey: crypto.randomUUID(),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       }),
-    onSuccess: async () => {
+    onSuccess: async (_result, command) => {
       setReason('');
       await Promise.all([
         client.invalidateQueries({ queryKey: ['action', id] }),
         client.invalidateQueries({ queryKey: ['actions'] }),
       ]);
+      if (command === 'CANCEL') void navigate('/created');
     },
   });
   const upload = useMutation({
@@ -590,9 +592,10 @@ function ActionControls({
   run: (command: TransitionActionRequestDto['command']) => void;
   pending: boolean;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const hasControls =
     (isAssignee && ['NEW', 'ACCEPTED', 'IN_PROGRESS', 'BLOCKED'].includes(action.status)) ||
-    (isCreator && action.status === 'DONE');
+    (isCreator && ['DONE', 'REJECTED'].includes(action.status));
   if (!hasControls) return null;
   const needsReason =
     (isAssignee && action.status === 'IN_PROGRESS') || (isCreator && action.status === 'DONE');
@@ -648,7 +651,29 @@ function ActionControls({
             </button>
           </>
         )}
+        {isCreator && action.status === 'REJECTED' && !confirmDelete && (
+          <button className="secondary" disabled={pending} onClick={() => setConfirmDelete(true)}>
+            Удалить дело
+          </button>
+        )}
+        {isCreator && action.status === 'REJECTED' && confirmDelete && (
+          <>
+            <button
+              className="secondary"
+              disabled={pending}
+              onClick={() => setConfirmDelete(false)}
+            >
+              Отмена
+            </button>
+            <button disabled={pending} onClick={() => run('CANCEL')}>
+              Да, удалить
+            </button>
+          </>
+        )}
       </div>
+      {isCreator && action.status === 'REJECTED' && confirmDelete && (
+        <p>Дело исчезнет из списков, но история сохранится.</p>
+      )}
     </section>
   );
 }

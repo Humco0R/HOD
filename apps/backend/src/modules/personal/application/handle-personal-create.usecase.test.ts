@@ -75,6 +75,10 @@ describe('HandlePersonalCreateUseCase', () => {
 
     await harness.useCase.handle(callback(`hod:personal:create:confirm:${draftId}`));
     expect(harness.create).toHaveBeenCalledOnce();
+    expect(harness.lastNotification().text).toContain('Дело уже создано');
+    expect(harness.lastNotification().buttons).toEqual([
+      { text: '🏠 Главное меню', payload: 'hod:personal:menu', row: 0 },
+    ]);
   });
 
   it('goes back through the steps without losing entered values', async () => {

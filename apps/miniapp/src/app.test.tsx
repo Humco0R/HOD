@@ -6,7 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionDetail, ActionSummary } from '@hod/contracts';
 
 import { App, ActionCard } from './app';
-import { createAction, ensureSession, fetchAttachment, getAction, listActions } from './api';
+import {
+  createAction,
+  ensureSession,
+  fetchAttachment,
+  getAction,
+  listActions,
+  transitionAction,
+} from './api';
 
 vi.mock('./api', () => ({
   ensureSession: vi.fn(),
@@ -253,6 +260,39 @@ describe('Mini App', () => {
     click.mockRestore();
     createObjectUrl.mockRestore();
     revokeObjectUrl.mockRestore();
+  });
+
+  it('lets the creator remove a rejected action after confirmation', async () => {
+    vi.mocked(ensureSession).mockResolvedValue({
+      id: action.creator.id,
+      firstName: action.creator.firstName,
+      lastName: action.creator.lastName,
+      externalUserId: '601',
+    });
+    vi.mocked(getAction).mockResolvedValue({
+      ...action,
+      status: 'REJECTED',
+      description: null,
+      sourceContext: [],
+      events: [],
+      attachments: [],
+    });
+    vi.mocked(transitionAction).mockResolvedValue({ status: 'CANCELLED', idempotent: false });
+
+    renderWithClient(<App />, `/actions/${action.id}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Удалить дело' }));
+    expect(
+      screen.getByText('Дело исчезнет из списков, но история сохранится.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Да, удалить' }));
+
+    await waitFor(() => expect(transitionAction).toHaveBeenCalledOnce());
+    expect(vi.mocked(transitionAction).mock.calls[0]?.[0]).toBe(action.id);
+    expect(vi.mocked(transitionAction).mock.calls[0]?.[1].command).toBe('CANCEL');
+    expect(vi.mocked(transitionAction).mock.calls[0]?.[1].idempotencyKey).toEqual(
+      expect.any(String),
+    );
   });
 });
 
