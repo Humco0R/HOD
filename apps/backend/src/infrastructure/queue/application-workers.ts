@@ -15,9 +15,11 @@ import {
 } from '../../integrations/max/max-notification.gateway';
 import {
   DrizzleActionContextStore,
+  DrizzlePendingActionInbox,
   DrizzleActionReminderStore,
   QueueActionLifecycleNotifications,
   QueueActionReminderNotifications,
+  RedisPendingActionInboxSessionStore,
   ScheduleActionRemindersUseCase,
 } from '../../modules/actions';
 import { DrizzleAttachmentStore, LocalProofStorage } from '../../modules/attachments';
@@ -57,7 +59,14 @@ export function createApplicationWorkers(
   let closing = false;
 
   const notificationPublisher = new BullMqNotificationPublisher(queues.notification);
-  const detectionMessaging = new BullMqDetectionMessaging(notificationPublisher);
+  const pendingInboxConnection = createRedisConnection(config.REDIS_URL, true);
+  connections.push(pendingInboxConnection);
+  const pendingInbox = new DrizzlePendingActionInbox(
+    database,
+    notificationPublisher,
+    new RedisPendingActionInboxSessionStore(pendingInboxConnection),
+  );
+  const detectionMessaging = new BullMqDetectionMessaging(notificationPublisher, pendingInbox);
   const actionContexts = new DrizzleActionContextStore(database);
   const outboxStore = new DrizzleOutboxStore(database);
   const outboxDispatcher = new DispatchOutboxUseCase(
@@ -65,7 +74,7 @@ export function createApplicationWorkers(
     new ApplicationOutboxHandler(
       detectionMessaging,
       actionContexts,
-      new QueueActionLifecycleNotifications(notificationPublisher),
+      new QueueActionLifecycleNotifications(notificationPublisher, pendingInbox),
       new QueueActionReminderNotifications(notificationPublisher),
     ),
   );

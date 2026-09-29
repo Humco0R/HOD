@@ -5,6 +5,7 @@ export const actionStatuses = [
   'BLOCKED',
   'DONE',
   'VERIFIED',
+  'REJECTED',
   'CANCELLED',
 ] as const;
 
@@ -18,6 +19,7 @@ export const actionCommands = [
   'SUBMIT_RESULT',
   'VERIFY',
   'RETURN',
+  'REJECT',
   'CANCEL',
 ] as const;
 
@@ -31,6 +33,7 @@ export type ActionEventType =
   | 'RESULT_SUBMITTED'
   | 'RESULT_ACCEPTED'
   | 'RESULT_REJECTED'
+  | 'ACTION_REJECTED'
   | 'ACTION_CANCELLED';
 
 export interface ActionLifecycleState {

@@ -4,6 +4,7 @@ export { TransitionActionUseCase } from './application/transition-action.usecase
 export type { TransitionActionRequest } from './application/transition-action.usecase';
 export { TransitionActionWithNotificationUseCase } from './application/transition-action-with-notification.usecase';
 export { HandleActionCallbackUseCase } from './application/handle-action-callback.usecase';
+export { HandlePendingActionInboxUseCase } from './application/handle-pending-action-inbox.usecase';
 export { HandleActionReasonUseCase } from './application/handle-action-reason.usecase';
 export type { ActionReasonSessionStore } from './application/action-reason-session.port';
 export { RedisActionReasonSessionStore } from './infrastructure/redis-action-reason-session.store';
@@ -14,12 +15,19 @@ export { DrizzleActionReminderStore } from './infrastructure/drizzle-action-remi
 export { ScheduleActionRemindersUseCase } from './application/schedule-action-reminders.usecase';
 export { DrizzleActionLifecycleStore } from './infrastructure/drizzle-action-lifecycle.store';
 export { DrizzleActionReadRepository } from './infrastructure/drizzle-action-read.repository';
+export { DrizzlePendingActionInbox } from './infrastructure/drizzle-pending-action-inbox';
+export { RedisPendingActionInboxSessionStore } from './infrastructure/redis-pending-action-inbox-session.store';
 export type { ActionListView, ActionReadPort } from './application/action-read.port';
 export type {
   ActionContextStore,
   ActionLifecycleNotificationPort,
   ActionReminderNotificationPort,
 } from './application/action-context.port';
+export type {
+  PendingActionInboxPort,
+  PendingActionInboxSessionStore,
+  PendingActionInboxViewPort,
+} from './application/pending-action-inbox.port';
 export type {
   ActionLifecycleStore,
   PersistedActionLifecycle,

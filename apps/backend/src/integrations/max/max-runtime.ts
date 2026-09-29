@@ -13,10 +13,13 @@ import {
   DrizzleActionCreateRepository,
   DrizzleActionEditRepository,
   DrizzleActionLifecycleStore,
+  DrizzlePendingActionInbox,
   DrizzleActionReadRepository,
   HandleActionCallbackUseCase,
+  HandlePendingActionInboxUseCase,
   HandleActionReasonUseCase,
   QueueActionLifecycleNotifications,
+  RedisPendingActionInboxSessionStore,
   RedisActionReasonSessionStore,
   TransitionActionUseCase,
   TransitionActionWithNotificationUseCase,
@@ -114,14 +117,20 @@ export function createMaxRuntime(
   );
   const directory = new DrizzleChatDirectoryStore(database);
   const detectionRepository = new DrizzleDetectionRepository(database);
-  const messaging = new BullMqDetectionMessaging(notificationPublisher);
   const actionContexts = new DrizzleActionContextStore(database);
   const actionReads = new DrizzleActionReadRepository(database);
+  const pendingInboxSessions = new RedisPendingActionInboxSessionStore(redis);
+  const pendingInbox = new DrizzlePendingActionInbox(
+    database,
+    notificationPublisher,
+    pendingInboxSessions,
+  );
+  const messaging = new BullMqDetectionMessaging(notificationPublisher, pendingInbox);
   const actionEditor = new DrizzleActionEditRepository(database);
   const actionTransitions = new TransitionActionWithNotificationUseCase(
     new TransitionActionUseCase(new DrizzleActionLifecycleStore(database)),
     actionContexts,
-    new QueueActionLifecycleNotifications(notificationPublisher),
+    new QueueActionLifecycleNotifications(notificationPublisher, pendingInbox),
   );
   const detectionQueue =
     config.AI_PROVIDER === 'disabled' ? null : new BullMqDetectionQueue(queues.detection);
@@ -187,9 +196,12 @@ export function createMaxRuntime(
       editSessions,
       actionContexts,
       config.WORKSPACE_DEFAULT_TIMEZONE,
+      pendingInbox,
     ),
 
-    new HandleActionCallbackUseCase(actionContexts, actionTransitions),
+    new HandlePendingActionInboxUseCase(pendingInbox),
+
+    new HandleActionCallbackUseCase(actionContexts, actionTransitions, pendingInboxSessions),
 
     new HandleDetectionAssigneeUseCase(
       new DrizzleDetectionManagementStore(database),

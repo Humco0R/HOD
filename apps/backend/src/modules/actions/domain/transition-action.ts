@@ -9,6 +9,7 @@ import type {
 
 const assigneeCommands = new Set<ActionCommand>([
   'ACCEPT',
+  'REJECT',
   'START',
   'BLOCK',
   'UNBLOCK',
@@ -25,6 +26,7 @@ interface TransitionDefinition {
 
 const definitions: Record<ActionCommand, TransitionDefinition> = {
   ACCEPT: { from: ['NEW'], to: 'ACCEPTED', eventType: 'ACTION_ACCEPTED' },
+  REJECT: { from: ['NEW'], to: 'REJECTED', eventType: 'ACTION_REJECTED' },
   START: { from: ['ACCEPTED'], to: 'IN_PROGRESS', eventType: 'ACTION_STARTED' },
   BLOCK: {
     from: ['ACCEPTED', 'IN_PROGRESS'],
