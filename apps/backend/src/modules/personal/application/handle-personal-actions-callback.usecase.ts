@@ -308,9 +308,10 @@ export class HandlePersonalActionsCallbackUseCase implements InboundChatEventHan
 
         text: details.join('\n'),
 
-        buttons: readOnly
-          ? buildReadOnlyActionButtons(action, listReturn)
-          : buildActionButtons(action, viewerId, listReturn),
+        buttons:
+          readOnly && !canDeleteAction(action, viewerId)
+            ? buildReadOnlyActionButtons(action, listReturn)
+            : buildActionButtons(action, viewerId, listReturn),
       },
 
       `personal-action-detail-${action.id}-${event.callbackId}`,
