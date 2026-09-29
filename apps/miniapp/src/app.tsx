@@ -387,6 +387,7 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
   });
   const [reason, setReason] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [bridgeDownloadError, setBridgeDownloadError] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<ActionDetail['attachments'][number] | null>(
     null,
   );
@@ -423,6 +424,29 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
     }),
     onSuccess: ({ attachment, content }) => saveAttachment(content, attachment.originalName),
   });
+  const downloadMaterial = (attachment: ActionDetail['attachments'][number]) => {
+    setBridgeDownloadError(null);
+    const bridge = window.WebApp;
+    if (bridge?.platform === 'ios' || bridge?.platform === 'android') {
+      if (!bridge.downloadFile) {
+        setBridgeDownloadError('Скачивание недоступно в этой версии MAX. Обновите приложение.');
+        return;
+      }
+      try {
+        const url = new URL(attachment.downloadUrl, window.location.origin);
+        if (url.origin !== window.location.origin) {
+          throw new Error('Ссылка на файл ведёт на другой сайт.');
+        }
+        void Promise.resolve(bridge.downloadFile(url.href, attachment.originalName)).catch(
+          (error: unknown) => setBridgeDownloadError(errorMessage(error)),
+        );
+      } catch (error) {
+        setBridgeDownloadError(errorMessage(error));
+      }
+      return;
+    }
+    download.mutate(attachment);
+  };
   if (query.isPending) return <EmptyState text="Загружаем дело…" />;
   if (query.isError) return <EmptyState text={errorMessage(query.error)} tone="error" />;
   const action = query.data;
@@ -488,7 +512,9 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
                 }`}
                 disabled={download.isPending}
                 onClick={() =>
-                  item.mimeType.startsWith('image/') ? setPhotoPreview(item) : download.mutate(item)
+                  item.mimeType.startsWith('image/')
+                    ? setPhotoPreview(item)
+                    : downloadMaterial(item)
                 }
               >
                 {item.mimeType.startsWith('image/') && (
@@ -500,7 +526,9 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
               </button>
             ))}
           </div>
-          {download.isError && <p className="form-error">{errorMessage(download.error)}</p>}
+          {(download.isError || bridgeDownloadError) && (
+            <p className="form-error">{bridgeDownloadError ?? errorMessage(download.error)}</p>
+          )}
         </DetailSection>
       )}
       {comments.length > 0 && (
