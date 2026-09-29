@@ -43,6 +43,7 @@ const cases: Array<{
   },
   { command: 'CANCEL', from: 'IN_PROGRESS', to: 'CANCELLED', actor: creator },
   { command: 'CANCEL', from: 'VERIFIED', to: 'CANCELLED', actor: creator },
+  { command: 'CANCEL', from: 'REJECTED', to: 'CANCELLED', actor: creator },
 ];
 
 describe('transitionAction', () => {
@@ -119,6 +120,18 @@ describe('transitionAction', () => {
       () =>
         transitionAction({
           action: { status: 'IN_PROGRESS', blockedFromStatus: null },
+          actor: assignee,
+          command: 'CANCEL',
+        }),
+      'FORBIDDEN',
+    );
+  });
+
+  it('does not allow an assignee to delete a rejected action', () => {
+    expectActionError(
+      () =>
+        transitionAction({
+          action: { status: 'REJECTED', blockedFromStatus: null },
           actor: assignee,
           command: 'CANCEL',
         }),

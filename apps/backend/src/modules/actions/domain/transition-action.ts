@@ -44,7 +44,7 @@ const definitions: Record<ActionCommand, TransitionDefinition> = {
     reasonRequired: true,
   },
   CANCEL: {
-    from: ['NEW', 'ACCEPTED', 'IN_PROGRESS', 'BLOCKED', 'VERIFIED'],
+    from: ['NEW', 'ACCEPTED', 'IN_PROGRESS', 'BLOCKED', 'VERIFIED', 'REJECTED'],
     to: 'CANCELLED',
     eventType: 'ACTION_CANCELLED',
   },

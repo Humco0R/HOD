@@ -12,9 +12,10 @@ export function canEditAction(action: ActionDetail, currentUserId: string): bool
 export function canDeleteAction(action: ActionDetail, currentUserId: string): boolean {
   return (
     action.creator.id === currentUserId &&
-    action.assignee.id === currentUserId &&
-    action.status !== 'DONE' &&
-    action.status !== 'CANCELLED'
+    (action.status === 'REJECTED' ||
+      (action.assignee.id === currentUserId &&
+        action.status !== 'DONE' &&
+        action.status !== 'CANCELLED'))
   );
 }
 
@@ -81,7 +82,10 @@ export function buildActionButtons(
       payload: `hod:personal:action:edit:${action.id}`,
       row: buttons.length,
     });
-  } else if (canDeleteAction(action, currentUserId) && action.status === 'VERIFIED') {
+  } else if (
+    canDeleteAction(action, currentUserId) &&
+    (action.status === 'VERIFIED' || action.status === 'REJECTED')
+  ) {
     buttons.push({
       text: '🗑 Удалить дело',
       payload: `hod:personal:action:delete:${action.id}`,

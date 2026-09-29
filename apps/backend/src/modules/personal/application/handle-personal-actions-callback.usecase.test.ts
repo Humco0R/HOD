@@ -189,6 +189,36 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
     ]);
   });
 
+  it('lets the creator delete a rejected given task from completed actions', async () => {
+    const harness = createHarness();
+    harness.getDetail.mockResolvedValue({
+      ...actionDetail(),
+      status: 'REJECTED',
+      assignee: {
+        id: '33333333-3333-4333-8333-333333333333',
+        firstName: 'Анна',
+        lastName: null,
+        username: null,
+      },
+    });
+
+    await harness.useCase.handle(
+      callbackEvent(`hod:personal:action:detail:${actionId}:given:completed:0`),
+    );
+
+    expect(harness.publish.mock.lastCall?.[0].buttons).toContainEqual({
+      text: '🗑 Удалить дело',
+      payload: `hod:personal:action:delete:${actionId}`,
+      row: 0,
+    });
+    expect(harness.publish.mock.lastCall?.[0].buttons).not.toContainEqual(
+      expect.objectContaining({ text: '✏️ Изменить' }),
+    );
+
+    await harness.useCase.handle(callbackEvent(`hod:personal:action:delete:${actionId}`));
+    expect(harness.publish.mock.lastCall?.[0].text).toContain('Удалить дело?');
+  });
+
   it('opens a pending result from the review list with confirmation actions and a return path', async () => {
     const harness = createHarness();
     harness.getDetail.mockResolvedValue({
