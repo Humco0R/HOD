@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActionDetail, ActionSummary } from '@hod/contracts';
 
@@ -71,6 +71,10 @@ beforeEach(() => {
     externalUserId: '602',
   });
   vi.mocked(listActions).mockResolvedValue({ actions: [action] });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('Mini App', () => {
@@ -260,6 +264,64 @@ describe('Mini App', () => {
     click.mockRestore();
     createObjectUrl.mockRestore();
     revokeObjectUrl.mockRestore();
+  });
+
+  it('downloads files through MAX Bridge on a phone without using the browser fallback', async () => {
+    const downloadFile = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('WebApp', { platform: 'ios', downloadFile });
+    vi.mocked(getAction).mockResolvedValue({
+      ...action,
+      description: null,
+      sourceContext: [],
+      events: [],
+      attachments: [
+        {
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          originalName: 'FIXED.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 32,
+          downloadUrl: '/api/attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          createdAt: '2026-09-20T10:01:00.000Z',
+        },
+      ],
+    });
+
+    renderWithClient(<App />, `/actions/${action.id}`);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'FIXED.txt' }));
+
+    expect(downloadFile).toHaveBeenCalledWith(
+      new URL('/api/attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', window.location.origin).href,
+      'FIXED.txt',
+    );
+    expect(fetchAttachment).not.toHaveBeenCalled();
+  });
+
+  it('shows a mobile download failure instead of silently falling back', async () => {
+    const downloadFile = vi.fn(() => Promise.reject(new Error('Файл недоступен')));
+    vi.stubGlobal('WebApp', { platform: 'android', downloadFile });
+    vi.mocked(getAction).mockResolvedValue({
+      ...action,
+      description: null,
+      sourceContext: [],
+      events: [],
+      attachments: [
+        {
+          id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          originalName: 'FIXED.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 32,
+          downloadUrl: '/api/attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          createdAt: '2026-09-20T10:01:00.000Z',
+        },
+      ],
+    });
+
+    renderWithClient(<App />, `/actions/${action.id}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'FIXED.txt' }));
+
+    expect(await screen.findByText('Файл недоступен')).toBeInTheDocument();
+    expect(fetchAttachment).not.toHaveBeenCalled();
   });
 
   it('lets the creator remove a rejected action after confirmation', async () => {

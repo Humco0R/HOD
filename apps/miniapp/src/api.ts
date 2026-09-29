@@ -14,6 +14,8 @@ declare global {
     WebApp?: {
       initData?: string;
       initDataUnsafe?: { start_param?: string };
+      platform?: 'ios' | 'android' | 'desktop' | 'web';
+      downloadFile?: (url: string, fileName: string) => Promise<unknown> | void;
       ready?: () => void;
       expand?: () => void;
     };
