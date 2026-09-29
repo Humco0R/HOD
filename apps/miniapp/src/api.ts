@@ -15,7 +15,6 @@ declare global {
       initData?: string;
       initDataUnsafe?: { start_param?: string };
       platform?: 'ios' | 'android' | 'desktop' | 'web';
-      downloadFile?: (url: string, fileName: string) => Promise<unknown> | void;
       ready?: () => void;
       expand?: () => void;
     };
@@ -108,6 +107,12 @@ export async function fetchAttachment(downloadUrl: string): Promise<Blob> {
     throw new ApiError(`Не удалось скачать файл: HTTP ${String(response.status)}`, response.status);
   }
   return response.blob();
+}
+
+export async function sendAttachmentToChat(attachmentId: string): Promise<void> {
+  await request<{ queued: boolean }>(`/api/attachments/${attachmentId}/send-to-chat`, {
+    method: 'POST',
+  });
 }
 
 export async function getDetection(id: string) {

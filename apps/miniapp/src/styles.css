@@ -394,6 +394,23 @@ button.filter-scroll-button {
   flex-direction: column;
   gap: 8px;
 }
+.attachment-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.attachment-filename {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.attachment-image-row > .attachment-button {
+  width: 100%;
+}
+.attachment-send-button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
 button.attachment-button {
   padding: 0;
   color: var(--accent);

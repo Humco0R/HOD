@@ -20,6 +20,7 @@ import {
   getDetection,
   getStartRoute,
   listActions,
+  sendAttachmentToChat,
   transitionAction,
   updateDetection,
   uploadProof,
@@ -380,6 +381,7 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const client = useQueryClient();
+  const nativeMax = window.WebApp?.platform === 'ios' || window.WebApp?.platform === 'android';
   const query = useQuery({
     queryKey: ['action', id],
     queryFn: () => getAction(id),
@@ -387,7 +389,7 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
   });
   const [reason, setReason] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [bridgeDownloadError, setBridgeDownloadError] = useState<string | null>(null);
+  const [chatSendInfo, setChatSendInfo] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<ActionDetail['attachments'][number] | null>(
     null,
   );
@@ -424,29 +426,11 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
     }),
     onSuccess: ({ attachment, content }) => saveAttachment(content, attachment.originalName),
   });
-  const downloadMaterial = (attachment: ActionDetail['attachments'][number]) => {
-    setBridgeDownloadError(null);
-    const bridge = window.WebApp;
-    if (bridge?.platform === 'ios' || bridge?.platform === 'android') {
-      if (!bridge.downloadFile) {
-        setBridgeDownloadError('Скачивание недоступно в этой версии MAX. Обновите приложение.');
-        return;
-      }
-      try {
-        const url = new URL(attachment.downloadUrl, window.location.origin);
-        if (url.origin !== window.location.origin) {
-          throw new Error('Ссылка на файл ведёт на другой сайт.');
-        }
-        void Promise.resolve(bridge.downloadFile(url.href, attachment.originalName)).catch(
-          (error: unknown) => setBridgeDownloadError(errorMessage(error)),
-        );
-      } catch (error) {
-        setBridgeDownloadError(errorMessage(error));
-      }
-      return;
-    }
-    download.mutate(attachment);
-  };
+  const sendToChat = useMutation({
+    mutationFn: (attachmentId: string) => sendAttachmentToChat(attachmentId),
+    onSuccess: () =>
+      setChatSendInfo('Файл отправляется в чат с ботом. Откройте переписку, чтобы посмотреть его.'),
+  });
   if (query.isPending) return <EmptyState text="Загружаем дело…" />;
   if (query.isError) return <EmptyState text={errorMessage(query.error)} tone="error" />;
   const action = query.data;
@@ -504,31 +488,55 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
         <DetailSection title="Доказательства">
           <div className="attachment-list">
             {action.attachments.map((item) => (
-              <button
-                type="button"
+              <div
                 key={item.id}
-                className={`attachment-button${
-                  item.mimeType.startsWith('image/') ? ' image-attachment' : ''
-                }`}
-                disabled={download.isPending}
-                onClick={() =>
+                className={
                   item.mimeType.startsWith('image/')
-                    ? setPhotoPreview(item)
-                    : downloadMaterial(item)
+                    ? 'attachment-image-row'
+                    : 'attachment-file-row'
                 }
               >
-                {item.mimeType.startsWith('image/') && (
-                  <img src={item.downloadUrl} alt={item.originalName} loading="lazy" />
+                {item.mimeType.startsWith('image/') ? (
+                  <button
+                    type="button"
+                    className="attachment-button image-attachment"
+                    onClick={() => setPhotoPreview(item)}
+                  >
+                    <img src={item.downloadUrl} alt={item.originalName} loading="lazy" />
+                    <span>Открыть фото</span>
+                  </button>
+                ) : nativeMax ? (
+                  <>
+                    <span className="attachment-filename">{item.originalName}</span>
+                    <button
+                      type="button"
+                      className="secondary attachment-send-button"
+                      aria-label={`Посмотреть ${item.originalName} в боте`}
+                      disabled={sendToChat.isPending}
+                      onClick={() => {
+                        setChatSendInfo(null);
+                        sendToChat.mutate(item.id);
+                      }}
+                    >
+                      Посмотреть в боте
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="attachment-button"
+                    disabled={download.isPending}
+                    onClick={() => download.mutate(item)}
+                  >
+                    {item.originalName}
+                  </button>
                 )}
-                <span>
-                  {item.mimeType.startsWith('image/') ? 'Открыть фото' : item.originalName}
-                </span>
-              </button>
+              </div>
             ))}
           </div>
-          {(download.isError || bridgeDownloadError) && (
-            <p className="form-error">{bridgeDownloadError ?? errorMessage(download.error)}</p>
-          )}
+          {chatSendInfo && <p className="muted">{chatSendInfo}</p>}
+          {download.isError && <p className="form-error">{errorMessage(download.error)}</p>}
+          {sendToChat.isError && <p className="form-error">{errorMessage(sendToChat.error)}</p>}
         </DetailSection>
       )}
       {comments.length > 0 && (
