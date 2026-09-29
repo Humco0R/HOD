@@ -2,16 +2,16 @@ version: '1.0'
 solution:
   id: hod
   name: ХОД
-  team: 'MANUAL SUBMISSION VALUE: team name'
+  team: Микод
 api:
   contract: ./openapi.yaml
   base_url:
     local: http://localhost:8080
-    production: 'MANUAL SUBMISSION VALUE: public HTTPS URL'
+    production: https://max.mi-kod.ru
   content_type: application/json
   authentication:
     production: signed MAX initData exchanged at POST /api/auth/max for an HttpOnly hod_session cookie
-    live_test_value: 'MANUAL SUBMISSION VALUE: fresh signed MAX initData or protected evaluator access instructions'
+    live_test_value: 'Open the Mini App inside MAX to receive fresh signed initData; test-role access instructions will be supplied separately.'
     local_verification:
       enabled_only_when: NODE_ENV=development and MINIAPP_DEV_AUTH=true
       endpoint: POST /api/auth/dev
@@ -32,7 +32,7 @@ required_checks:
     method: POST
     path: /api/auth/max
     body:
-      initData: 'MANUAL SUBMISSION VALUE: fresh signed MAX initData'
+      initData: '<FRESH_SIGNED_INIT_DATA_FROM_MAX_MINI_APP>'
     expected_status_codes: [200, 401, 403, 503]
     expected_content_type: application/json
     required_response_fields: [id, firstName, lastName, externalUserId]
@@ -146,6 +146,7 @@ verification_order:
   - Create a foreign-owner cookie and verify cross-workspace isolation in both directions.
   - Run test_data.reset when the manual API check is complete.
 notes:
-  - Replace MANUAL SUBMISSION VALUE fields only in the final protected submission material.
+  - The Mini App URL must be opened inside MAX; opening it in an ordinary browser does not provide MAX initData.
+  - Test-role provisioning is pending separate evaluator-access instructions from the team.
   - Never commit live initData, session cookies, bot tokens, provider credentials or passwords.
   - MAX webhook /max/webhook is provider-facing and is therefore excluded from user API checks.

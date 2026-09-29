@@ -9,6 +9,8 @@ import type { RedisConnection } from '../../infrastructure/redis/redis';
 import type { AttachmentStore, LocalProofStorage } from '../../modules/attachments';
 import type { OutboundNotification } from '../../modules/notifications';
 import { toSafeErrorLog } from '../../shared/logger';
+import { createMaxRetryAfterFetch } from './max-retry-after-fetch';
+import type { MaxSendRateLimiter } from './max-send-rate-limiter';
 
 type MaxAttachments = NonNullable<
   NonNullable<Parameters<Bot['api']['sendMessageToUser']>[2]>['attachments']
@@ -55,8 +57,11 @@ export class MaxNotificationGateway {
     private readonly proofStorage?: LocalProofStorage,
     private readonly screens?: MaxScreenStore,
     private readonly logger?: Pick<Logger, 'warn'>,
+    private readonly rateLimiter?: MaxSendRateLimiter,
   ) {
-    this.bot = new Bot(token, { clientOptions: { baseUrl } });
+    this.bot = new Bot(token, {
+      clientOptions: { baseUrl, fetch: createMaxRetryAfterFetch() },
+    });
   }
 
   async send(notification: OutboundNotification): Promise<void> {
@@ -140,6 +145,7 @@ export class MaxNotificationGateway {
     if (keyboardRows.length) attachments.push(Keyboard.inlineKeyboard(keyboardRows));
     const extra = attachments.length ? { attachments } : undefined;
     const externalId = toSdkId(notification.target.externalId);
+    await this.rateLimiter?.acquire(notification.target);
     if (notification.target.type === 'CHAT') {
       await this.bot.api.sendMessageToChat(externalId, text, extra);
     } else {

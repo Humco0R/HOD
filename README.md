@@ -97,7 +97,7 @@ docker compose up --build
 | `REMINDER_SCAN_INTERVAL_SECONDS` | период сканирования reminders | да | `60` | worker |
 | `OUTBOX_POLL_INTERVAL_MS` | период outbox dispatcher | да | `1000` | worker |
 | `OUTBOX_RETENTION_DAYS` | хранение отправленных событий | да | `7` | worker |
-| `MAX_RATE_LIMIT_PER_SECOND` | лимит исходящих MAX операций | да | `10` | worker |
+| `MAX_RATE_LIMIT_PER_SECOND` | общий лимит очереди исходящих MAX-уведомлений; дополнительно действует лимит 2 сообщения/с на адресата | да | `10` | worker |
 | `PROOF_STORAGE_PATH` | каталог proof-файлов | да | `/data/proofs` | backend/worker |
 | `PROOF_MAX_BYTES` | лимит одного файла | да | `10485760` | backend/worker |
 | `MINIAPP_ORIGIN` | разрешённый origin Mini App | да | `http://localhost:8080` | backend |
@@ -163,9 +163,11 @@ Seed/reset затрагивают только перечисленные в `DA
 
 PostgreSQL хранит доменное состояние, audit, detection, attachment metadata и outbox. Redis хранит очереди, короткий conversation context, dedup и сессии. Proof-файлы находятся вне web root. GigaChat получает trigger и максимум четыре соседних сообщения, timezone и отображаемые имена; результат проходит JSON Schema и локальную Zod/domain validation.
 
+При включённом AI каждое групповое сообщение активного участника ставится в очередь детекции; предварительного фильтра нет. Для исходящих уведомлений worker резервирует в Redis не более двух отправок в секунду на диалог или чат. Ответ MAX `429` с `Retry-After` обрабатывается ограниченным повтором до возврата ошибки в очередь.
+
 ## Платформенная ценность MAX
 
-Кроме обмена сообщениями используются callback-кнопки, `/start`, `bot_started`, события групп и участников, Mini App `initData`, `startapp` deep links, защищённая работа с файлами и редактирование callback-сообщения после действия. Это органично сокращает путь от договорённости до подтверждённого результата. Автотесты подтверждают контракты и сценарии; право на бонус остаётся **NOT VERIFIED**, пока команда не пройдёт live E2E в реальном клиенте MAX.
+Кроме обмена сообщениями используются callback-кнопки, `/start`, `bot_started`, события групп и участников, Mini App `initData`, `startapp` deep links, защищённая работа с файлами и редактирование callback-сообщения после действия. Это органично сокращает путь от договорённости до подтверждённого результата. Автотесты подтверждают контракты и сценарии; команда сообщает, что вручную прошла live E2E в MAX. Решение о платформенном бонусе остаётся за жюри.
 
 В native MAX proof скачивается через `window.WebApp.downloadFile`; на платформе `web` остаётся обычная авторизованная HTTPS-ссылка.
 

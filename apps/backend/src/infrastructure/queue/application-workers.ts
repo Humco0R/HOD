@@ -13,6 +13,7 @@ import {
   MaxNotificationGateway,
   RedisMaxScreenStore,
 } from '../../integrations/max/max-notification.gateway';
+import { RedisMaxSendRateLimiter } from '../../integrations/max/max-send-rate-limiter';
 import {
   DrizzleActionContextStore,
   DrizzlePendingActionInbox,
@@ -177,6 +178,7 @@ export function createApplicationWorkers(
       new LocalProofStorage(config.PROOF_STORAGE_PATH),
       new RedisMaxScreenStore(connection),
       logger,
+      new RedisMaxSendRateLimiter(connection),
     );
     workers.push(
       new Worker<OutboundNotification>('notification', async (job) => gateway.send(job.data), {

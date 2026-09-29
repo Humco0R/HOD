@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AttachmentStore, LocalProofStorage } from '../../modules/attachments';
 import type { OutboundNotification } from '../../modules/notifications';
 import { MaxNotificationGateway, type MaxScreenStore } from './max-notification.gateway';
+import type { MaxSendRateLimiter } from './max-send-rate-limiter';
 
 describe('MaxNotificationGateway', () => {
   it('sends a stored photo back into MAX after checking access', async () => {
@@ -126,6 +127,29 @@ describe('MaxNotificationGateway', () => {
     expect(sendToChat).toHaveBeenCalledWith(900, 'Дело создано', undefined);
   });
 
+  it('reserves the target rate slot before sending a notification', async () => {
+    let release: (() => void) | undefined;
+    const acquire = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const limiter: MaxSendRateLimiter = {
+      acquire,
+    };
+    const harness = createHarness('application/pdf', undefined, undefined, limiter);
+    const notification = preview();
+    delete notification.media;
+
+    const sending = harness.gateway.send(notification);
+    await vi.waitFor(() => expect(acquire).toHaveBeenCalledWith(notification.target));
+    expect(harness.send).not.toHaveBeenCalled();
+    release?.();
+    await sending;
+    expect(harness.send).toHaveBeenCalledOnce();
+  });
+
   it('removes the previous create prompt after a text response', async () => {
     const replace = vi
       .fn<MaxScreenStore['replace']>()
@@ -191,7 +215,12 @@ function homeKeyboard() {
   };
 }
 
-function createHarness(mimeType: string, miniAppBotName?: string, screenStore?: MaxScreenStore) {
+function createHarness(
+  mimeType: string,
+  miniAppBotName?: string,
+  screenStore?: MaxScreenStore,
+  rateLimiter?: MaxSendRateLimiter,
+) {
   const getForDownload = vi.fn<AttachmentStore['getForDownload']>(() =>
     Promise.resolve({
       id: 'attachment-id',
@@ -208,6 +237,8 @@ function createHarness(mimeType: string, miniAppBotName?: string, screenStore?: 
     { getForDownload } as unknown as AttachmentStore,
     { read } as unknown as LocalProofStorage,
     screenStore,
+    undefined,
+    rateLimiter,
   );
   const bot = (gateway as unknown as { bot: Bot }).bot;
   const send = vi
