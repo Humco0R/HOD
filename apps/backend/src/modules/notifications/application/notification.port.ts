@@ -16,6 +16,7 @@ export interface OutboundNotification {
   screen?: {
     key: string;
     replacePrevious: boolean;
+    revision?: string;
   };
 
   buttons: Array<

@@ -270,13 +270,13 @@ function filterActions(actions: ActionSummary[], category: PersonalListCategory)
     if (action.status === 'CANCELLED') return false;
     switch (category) {
       case 'active':
-        return action.status !== 'DONE' && action.status !== 'VERIFIED';
+        return !['DONE', 'VERIFIED', 'REJECTED'].includes(action.status);
       case 'today':
         return action.attentionReasons.includes('DUE_TODAY');
       case 'overdue':
         return action.attentionReasons.includes('OVERDUE');
       case 'completed':
-        return action.status === 'DONE' || action.status === 'VERIFIED';
+        return ['DONE', 'VERIFIED', 'REJECTED'].includes(action.status);
       case 'review':
         return action.status === 'DONE';
     }
@@ -321,6 +321,7 @@ function formatStatus(status: ActionSummary['status']): string {
     BLOCKED: 'Заблокировано',
     DONE: 'На проверке',
     VERIFIED: 'Завершено',
+    REJECTED: 'Отклонено',
     CANCELLED: 'Удалено',
   };
   return labels[status];

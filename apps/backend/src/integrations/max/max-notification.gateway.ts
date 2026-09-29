@@ -15,14 +15,32 @@ type MaxAttachments = NonNullable<
 >;
 
 export interface MaxScreenStore {
-  replace(userId: string, screenKey: string, messageId: string): Promise<string | null>;
+  replace(
+    userId: string,
+    screenKey: string,
+    messageId: string,
+    revision?: string,
+  ): Promise<string | null>;
 }
 
 export class RedisMaxScreenStore implements MaxScreenStore {
   constructor(private readonly redis: RedisConnection) {}
 
-  replace(userId: string, screenKey: string, messageId: string): Promise<string | null> {
-    return this.redis.set(`hod:max:screen:${userId}:${screenKey}`, messageId, 'EX', 3600, 'GET');
+  async replace(
+    userId: string,
+    screenKey: string,
+    messageId: string,
+    revision?: string,
+  ): Promise<string | null> {
+    const messageKey = `hod:max:screen:${userId}:${screenKey}`;
+    if (!revision) return this.redis.set(messageKey, messageId, 'EX', 3600, 'GET');
+    const result = await this.redis
+      .multi()
+      .get(messageKey)
+      .set(messageKey, messageId, 'EX', 3600)
+      .set(`hod:max:screen-revision:${userId}:${screenKey}`, revision, 'EX', 7 * 24 * 60 * 60)
+      .exec();
+    return (result?.[0]?.[1] as string | null | undefined) ?? null;
   }
 }
 
@@ -128,11 +146,18 @@ export class MaxNotificationGateway {
       const message = await this.bot.api.sendMessageToUser(externalId, text, extra);
       if (notification.screen && this.screens && message.body?.mid) {
         try {
-          const previous = await this.screens.replace(
-            notification.target.externalId,
-            notification.screen.key,
-            message.body.mid,
-          );
+          const previous = notification.screen.revision
+            ? await this.screens.replace(
+                notification.target.externalId,
+                notification.screen.key,
+                message.body.mid,
+                notification.screen.revision,
+              )
+            : await this.screens.replace(
+                notification.target.externalId,
+                notification.screen.key,
+                message.body.mid,
+              );
           if (notification.screen.replacePrevious && previous && previous !== message.body.mid) {
             const result = await this.bot.api.deleteMessage(previous);
             if (!result.success) {

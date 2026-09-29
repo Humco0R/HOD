@@ -14,7 +14,7 @@ export class DrizzleActionReminderStore implements ActionReminderScheduleStore {
         .select({ action: actions, settings: workspaces.settings })
         .from(actions)
         .innerJoin(workspaces, eq(workspaces.id, actions.workspaceId))
-        .where(notInArray(actions.status, ['DONE', 'VERIFIED', 'CANCELLED']));
+        .where(notInArray(actions.status, ['DONE', 'VERIFIED', 'REJECTED', 'CANCELLED']));
       const due = rows.filter(({ action, settings }) =>
         isDue(action, settings.timezone, now, leadMinutes),
       );

@@ -29,7 +29,10 @@ export class BullMqDetectionQueue implements DetectionQueuePort {
 }
 
 export class BullMqDetectionMessaging implements DetectionProposalPort, AssignmentNotificationPort {
-  constructor(private readonly notifications: NotificationPublisher) {}
+  constructor(
+    private readonly notifications: NotificationPublisher,
+    private readonly assignmentNotifications?: AssignmentNotificationPort,
+  ) {}
 
   async publish(
     input:
@@ -95,6 +98,11 @@ export class BullMqDetectionMessaging implements DetectionProposalPort, Assignme
         },
         `proposal-${input.detectionId}`,
       );
+      return;
+    }
+
+    if (this.assignmentNotifications) {
+      await this.assignmentNotifications.publish(input);
       return;
     }
 

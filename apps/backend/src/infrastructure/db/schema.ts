@@ -32,6 +32,7 @@ export const actionStatusEnum = pgEnum('action_status', [
   'BLOCKED',
   'DONE',
   'VERIFIED',
+  'REJECTED',
   'CANCELLED',
 ]);
 export const deadlineKindEnum = pgEnum('deadline_kind', [
@@ -63,6 +64,7 @@ export const actionEventTypeEnum = pgEnum('action_event_type', [
   'RESULT_SUBMITTED',
   'RESULT_REJECTED',
   'RESULT_ACCEPTED',
+  'ACTION_REJECTED',
   'ACTION_CANCELLED',
   'DEADLINE_CHANGED',
   'ASSIGNEE_CHANGED',

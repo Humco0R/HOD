@@ -23,6 +23,23 @@ describe('BullMqDetectionMessaging', () => {
     });
   });
 
+  it('delegates assignments to the aggregate pending inbox', async () => {
+    const publish = vi.fn<NotificationPublisher['publish']>(() => Promise.resolve());
+    const assignmentPublish = vi.fn(() => Promise.resolve());
+    const messaging = new BullMqDetectionMessaging({ publish }, { publish: assignmentPublish });
+    const assignment = {
+      actionId: '00000000-0000-4000-8000-000000000001',
+      assigneeExternalUserId: '42',
+      creatorName: 'Анна Соколова',
+      title: 'Проверить договор',
+    };
+
+    await messaging.publish(assignment);
+
+    expect(assignmentPublish).toHaveBeenCalledWith(assignment);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
   it('offers assignee selection in chat for ambiguous proposals', async () => {
     const publish = vi.fn<NotificationPublisher['publish']>(() => Promise.resolve());
     const messaging = new BullMqDetectionMessaging({ publish });

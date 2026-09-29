@@ -60,6 +60,7 @@ const transitionSchema = z.object({
     'SUBMIT_RESULT',
     'VERIFY',
     'RETURN',
+    'REJECT',
     'CANCEL',
   ]),
   reason: z.string().nullable(),

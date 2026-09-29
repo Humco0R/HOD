@@ -145,7 +145,7 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
     expect(harness.publish.mock.calls[0]?.[0].buttons).toContainEqual({
       text: '⬅️ Назад',
       payload: 'hod:personal:actions:received:active:2',
-      row: 2,
+      row: 3,
     });
   });
 
@@ -397,7 +397,7 @@ describe('HandlePersonalActionsCallbackUseCase', () => {
     expect(harness.publish.mock.lastCall?.[0].buttons).toContainEqual({
       text: '📎 Материалы (1)',
       payload: `hod:personal:materials:${actionId}:0`,
-      row: 2,
+      row: 3,
     });
   });
 });

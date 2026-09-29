@@ -15,6 +15,7 @@ export const actionStatusSchema = z.enum([
   'BLOCKED',
   'DONE',
   'VERIFIED',
+  'REJECTED',
   'CANCELLED',
 ]);
 export const deadlineKindSchema = z.enum([
@@ -98,6 +99,7 @@ export const transitionActionRequestSchema = z.object({
     'SUBMIT_RESULT',
     'VERIFY',
     'RETURN',
+    'REJECT',
     'CANCEL',
   ]),
   reason: z.string().max(2_000).optional(),
