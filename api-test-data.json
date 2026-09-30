@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "classification": "synthetic test data",
+  "scope": "isolated local API-test stack only; never the public production database",
+  "seed": "scripts/api-test-seed.sql",
+  "reset": "scripts/api-test-reset.sql",
+  "roles": {
+    "creator_owner": {
+      "externalUserId": "990000001",
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "workspaceId": "00000000-0000-4000-8000-000000000101"
+    },
+    "assignee_member": {
+      "externalUserId": "990000002",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "workspaceId": "00000000-0000-4000-8000-000000000101"
+    },
+    "foreign_owner": {
+      "externalUserId": "990000003",
+      "userId": "00000000-0000-4000-8000-000000000003",
+      "workspaceId": "00000000-0000-4000-8000-000000000102"
+    }
+  },
+  "actions": {
+    "proof_action": {
+      "id": "00000000-0000-4000-8000-000000000301",
+      "workspaceId": "00000000-0000-4000-8000-000000000101",
+      "creatorRole": "creator_owner",
+      "assigneeRole": "assignee_member",
+      "title": "API proof lifecycle check",
+      "initialStatus": "NEW",
+      "expectedResultType": "PHOTO"
+    },
+    "foreign_action": {
+      "id": "00000000-0000-4000-8000-000000000302",
+      "workspaceId": "00000000-0000-4000-8000-000000000102",
+      "creatorRole": "foreign_owner",
+      "assigneeRole": "foreign_owner",
+      "title": "API cross-workspace isolation check",
+      "initialStatus": "NEW",
+      "expectedResultType": "NONE"
+    }
+  }
+}

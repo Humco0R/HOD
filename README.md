@@ -148,9 +148,11 @@ Golden dataset — синтетический набор из 160 размече
 
 ## API и данные
 
-Backend является собственным session-authenticated API Mini App. Контракт: [openapi.yaml](openapi.yaml); `npm run test:openapi` сопоставляет его со всеми public routes. Машиночитаемый порядок проверки: [DATA-API.yaml](DATA-API.yaml). Production-аутентификация требует подписанный MAX `initData`; production credentials не хранятся в Git.
+Backend является собственным session-authenticated API Mini App по адресу `https://max.mi-kod.ru`. Контракт: [openapi.yaml](openapi.yaml); `node scripts/check-openapi.mjs` сопоставляет его со всеми public routes. Машиночитаемый порядок проверки: [DATA-API.yaml](DATA-API.yaml), а набор воспроизводимых синтетических данных: [api-test-data.json](api-test-data.json). Production-аутентификация требует подписанный MAX `initData`; production credentials не хранятся в Git.
 
-Для локальной API-проверки доступны изолированный `docker-compose.api-test.yml` и детерминированные fixtures. Они включают dev auth только у backend и не работают в production:
+Для проверки публичного API откройте [бота](https://max.ru/t252_hakaton_max_bot) в MAX и войдите в [тестовую беседу](https://max.ru/join/HYzBHJBc_LAWMGg0FexqzpPVdl7UMzngIbuyIERBFT0) со своим аккаунтом. В беседе уже есть участники, которым можно назначить дело; для самостоятельного прохождения обеих ролей используйте два своих аккаунта. Откройте Mini App из MAX: она передаст свежий подписанный `initData` в `POST /api/auth/max` и получит HttpOnly cookie `hod_session`. С этим cookie доступны защищённые `/api/*` методы в рамках прав пользователя. Отдельных тестовых логинов, паролей или ключей для проверки работающего стенда нет; `GET https://max.mi-kod.ru/health/ready` доступен без входа.
+
+Для проверки ролей и изоляции данных без зависимости от участников беседы доступны изолированный `docker-compose.api-test.yml` и детерминированные fixtures из `api-test-data.json`. Они включают dev auth только у локального backend и не работают в production:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.api-test.yml up -d --build

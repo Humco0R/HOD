@@ -6,8 +6,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local Docker Compose
-  - url: https://example.invalid
-    description: Replace with the public HTTPS deployment URL
+  - url: https://max.mi-kod.ru
+    description: Public HTTPS API used by the MAX Mini App; authenticated routes require a MAX session
 tags:
   - name: Health
   - name: Auth
