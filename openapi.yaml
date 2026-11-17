@@ -82,7 +82,7 @@ paths:
               schema: { type: string }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CurrentUser' }
+              schema: { $ref: '#/components/schemas/AuthSession' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '503': { $ref: '#/components/responses/Error' }
@@ -108,7 +108,7 @@ paths:
           description: Development session created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CurrentUser' }
+              schema: { $ref: '#/components/schemas/AuthSession' }
         '404': { $ref: '#/components/responses/Error' }
   /api/auth/session:
     delete:
@@ -561,6 +561,10 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
+    sessionBearer:
+      type: http
+      scheme: bearer
+      description: Session token returned after signed MAX authentication; supports clients that block cookies
     sessionCookie:
       type: apiKey
       in: cookie
@@ -699,6 +703,14 @@ components:
           properties:
             postgres: { type: string, enum: [up, down] }
             redis: { type: string, enum: [up, down] }
+    AuthSession:
+      allOf:
+        - $ref: '#/components/schemas/CurrentUser'
+        - type: object
+          required: [sessionToken]
+          properties:
+            sessionToken:
+              { type: string, minLength: 43, maxLength: 43, description: Keep only in page memory }
     CurrentUser:
       type: object
       required: [id, firstName, lastName, externalUserId]
@@ -840,3 +852,4 @@ components:
         idempotencyKey: { type: string, minLength: 1, maxLength: 200 }
 security:
   - sessionCookie: []
+  - sessionBearer: []

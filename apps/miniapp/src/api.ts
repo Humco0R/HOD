@@ -1,5 +1,6 @@
 import type {
   ActionDetail,
+  AuthSession,
   ActionSummary,
   CreateActionRequestDto,
   CreateActionResponseDto,
@@ -35,8 +36,19 @@ export class ApiError extends Error {
   }
 }
 
+// Webviews may block third-party cookies. Keep the validated session only in page memory.
+let sessionToken: string | undefined;
+
+async function authenticatedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const url = new URL(path, window.location.origin);
+  if (url.origin !== window.location.origin) throw new Error('Недопустимый адрес API');
+  const headers = new Headers(init?.headers);
+  if (sessionToken) headers.set('Authorization', `Bearer ${sessionToken}`);
+  return fetch(path, { ...init, credentials: 'include', headers });
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { credentials: 'include', ...init });
+  const response = await authenticatedFetch(path, init);
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
       error?: string;
@@ -65,17 +77,28 @@ export async function ensureSession(): Promise<CurrentUser> {
     return await request<CurrentUser>('/api/me');
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    sessionToken = undefined;
   }
   const initData = maxInitData();
   if (!initData) {
     try {
-      return await request<CurrentUser>('/api/auth/dev', { method: 'POST', ...json({}) });
+      return acceptSession(
+        await request<AuthSession>('/api/auth/dev', { method: 'POST', ...json({}) }),
+      );
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 404) throw error;
       throw new Error('Откройте ХОД из MAX, чтобы подтвердить личность.', { cause: error });
     }
   }
-  return request<CurrentUser>('/api/auth/max', { method: 'POST', ...json({ initData }) });
+  return acceptSession(
+    await request<AuthSession>('/api/auth/max', { method: 'POST', ...json({ initData }) }),
+  );
+}
+
+function acceptSession(value: AuthSession): CurrentUser {
+  const { sessionToken: token, ...user } = value;
+  sessionToken = token;
+  return user;
 }
 
 export async function listActions(view: 'assigned' | 'created' | 'team') {
@@ -107,7 +130,7 @@ export async function uploadProof(id: string, file: File) {
 }
 
 export async function fetchAttachment(downloadUrl: string): Promise<Blob> {
-  const response = await fetch(downloadUrl, { credentials: 'include' });
+  const response = await authenticatedFetch(downloadUrl);
   if (!response.ok) {
     throw new ApiError(`Не удалось скачать файл: HTTP ${String(response.status)}`, response.status);
   }

@@ -11,6 +11,7 @@ import {
   createActionRequestSchema,
   createActionResponseSchema,
   currentUserSchema,
+  authSessionSchema,
   detectionDetailSchema,
   detectionEditSchema,
   transitionActionRequestSchema,
@@ -41,6 +42,7 @@ import {
 import { BullMqNotificationPublisher } from '../../modules/notifications';
 import { DrizzlePersonalWorkspaceStore } from '../../modules/personal';
 import { miniAppSessionCookieOptions } from './miniapp-session-cookie';
+import { miniAppSessionToken } from './miniapp-session-token';
 import { registerMeetingsApi } from './meetings-api.routes';
 import {
   BullMqDetectionMessaging,
@@ -116,13 +118,14 @@ export function registerMiniAppApi(
   const detectionMessaging = new BullMqDetectionMessaging(notificationPublisher, pendingInbox);
 
   const requireSession = async (request: FastifyRequest): Promise<MiniAppSession> => {
-    const session = await sessions.get(request.cookies[SESSION_COOKIE]);
+    const session = await sessions.get(miniAppSessionToken(request));
     if (!session) throw app.httpErrors.unauthorized('Mini App session is invalid or expired');
     return session;
   };
 
   const setSessionCookie = (reply: FastifyReply, token: string): void => {
     reply.setCookie(SESSION_COOKIE, token, miniAppSessionCookieOptions(config));
+    reply.header('Cache-Control', 'no-store');
   };
 
   registerMeetingsApi(app, {
@@ -153,9 +156,10 @@ export function registerMiniAppApi(
       }
       const result = await sessions.create(identity);
       setSessionCookie(reply, result.token);
-      return currentUserSchema.parse(
-        await reads.getCurrentUser(result.session.userId, result.session.externalUserId),
-      );
+      return authSessionSchema.parse({
+        ...(await reads.getCurrentUser(result.session.userId, result.session.externalUserId)),
+        sessionToken: result.token,
+      });
     } catch (error) {
       if (error instanceof InvalidMaxInitDataError) {
         throw app.httpErrors.unauthorized('MAX init data is invalid or expired');
@@ -197,13 +201,17 @@ export function registerMiniAppApi(
       queryId: 'development',
     });
     setSessionCookie(reply, result.token);
-    return currentUserSchema.parse(
-      await reads.getCurrentUser(result.session.userId, result.session.externalUserId),
-    );
+    return authSessionSchema.parse({
+      ...(await reads.getCurrentUser(result.session.userId, result.session.externalUserId)),
+      sessionToken: result.token,
+    });
   });
 
   app.delete('/api/auth/session', async (request, reply) => {
-    await sessions.delete(request.cookies[SESSION_COOKIE]);
+    assertMutationOrigin(request, config, app);
+    for (const token of new Set([miniAppSessionToken(request), request.cookies[SESSION_COOKIE]])) {
+      await sessions.delete(token);
+    }
     reply.clearCookie(SESSION_COOKIE, miniAppSessionCookieOptions(config));
     return reply.code(204).send();
   });

@@ -12,6 +12,7 @@ import {
 } from 'react-router-dom';
 import { CreateMeetingPage, MeetingDetailPage, MeetingListPage } from './meetings';
 import { ThemePicker } from './theme';
+import { AttachmentImage } from './attachment-image';
 
 import type {
   ActionDetail,
@@ -534,7 +535,7 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
                     className="attachment-button image-attachment"
                     onClick={() => setPhotoPreview(item)}
                   >
-                    <img src={item.downloadUrl} alt={item.originalName} loading="lazy" />
+                    <AttachmentImage url={item.downloadUrl} name={item.originalName} lazy />
                     <span>Открыть фото</span>
                   </button>
                 ) : nativeMax ? (
@@ -601,11 +602,9 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
           >
             ×
           </button>
-          <img
-            src={photoPreview.downloadUrl}
-            alt={photoPreview.originalName}
-            onClick={(event) => event.stopPropagation()}
-          />
+          <div onClick={(event) => event.stopPropagation()}>
+            <AttachmentImage url={photoPreview.downloadUrl} name={photoPreview.originalName} />
+          </div>
         </div>
       )}
       {isAssignee && ['IN_PROGRESS', 'BLOCKED'].includes(action.status) && (
