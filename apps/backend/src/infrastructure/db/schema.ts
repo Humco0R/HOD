@@ -89,6 +89,7 @@ export const users = pgTable(
     firstName: text('first_name').notNull(),
     lastName: text('last_name'),
     username: text('username'),
+    timezone: text('timezone'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -326,5 +327,60 @@ export const outboxEvents = pgTable(
   (table) => [
     uniqueIndex('outbox_events_dedupe_unique').on(table.dedupeKey),
     index('outbox_events_dispatch_idx').on(table.status, table.availableAt),
+  ],
+);
+
+export const meetingStatusEnum = pgEnum('meeting_status', [
+  'OPEN',
+  'SCHEDULED',
+  'COMPLETED',
+  'CANCELLED',
+]);
+
+export const meetings = pgTable(
+  'meetings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizerId: uuid('organizer_id')
+      .notNull()
+      .references(() => users.id),
+    chatId: uuid('chat_id').references(() => chats.id, { onDelete: 'set null' }),
+    actionId: uuid('action_id').references(() => actions.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    durationMinutes: integer('duration_minutes').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    windowEnd: timestamp('window_end', { withTimezone: true }).notNull(),
+    timezone: text('timezone').notNull(),
+    inviteToken: uuid('invite_token').defaultRandom().notNull(),
+    status: meetingStatusEnum('status').default('OPEN').notNull(),
+    scheduledStart: timestamp('scheduled_start', { withTimezone: true }),
+    revision: integer('revision').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('meetings_organizer_idx').on(table.organizerId),
+    index('meetings_status_idx').on(table.status),
+  ],
+);
+
+export const meetingParticipants = pgTable(
+  'meeting_participants',
+  {
+    meetingId: uuid('meeting_id')
+      .notNull()
+      .references(() => meetings.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
+    intervals: jsonb('intervals')
+      .$type<Array<{ start: string; end: string }>>()
+      .notNull()
+      .default([]),
+  },
+  (table) => [
+    primaryKey({ columns: [table.meetingId, table.userId] }),
+    index('meeting_participants_user_idx').on(table.userId),
   ],
 );

@@ -14,6 +14,7 @@ tags:
   - name: Actions
   - name: Detections
   - name: Attachments
+  - name: Meetings
 paths:
   /:
     get:
@@ -369,6 +370,195 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/meetings/context:
+    get:
+      tags: [Meetings]
+      summary: Current user's timezone and available group chats
+      responses:
+        '200':
+          description: Meeting creation context
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [timezone, chats]
+                properties:
+                  timezone: { type: [string, 'null'] }
+                  chats:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, title]
+                      properties:
+                        id: { type: string, format: uuid }
+                        title: { type: string }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/meetings:
+    get:
+      tags: [Meetings]
+      summary: List up to 100 meetings the current user participates in
+      responses:
+        '200':
+          description: Meetings, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [meetings]
+                properties:
+                  meetings:
+                    type: array
+                    items: { $ref: '#/components/schemas/MeetingSummary' }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Meetings]
+      summary: Create a meeting and queue invitations atomically
+      description: Reusing idempotencyKey returns the existing meeting for its organizer. A group chat adds its active workspace members; otherwise participants join using the invitation link. Linking actionId requires access to that action and a matching workspace when chatId is set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMeeting' }
+      responses:
+        '200':
+          description: Created or existing meeting ID
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string, format: uuid }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/meetings/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Meetings]
+      summary: Get a meeting, current user's availability and the best 12 time slots
+      description: Requires participation. Other participants' raw availability is not returned. Linked action information is returned only when the caller can access its workspace. Unanswered participants remain unknown.
+      responses:
+        '200':
+          description: Meeting detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeetingDetail' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/meetings/{id}/invitation:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - in: query
+        name: token
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Meetings]
+      summary: Preview an invitation without joining
+      responses:
+        '200':
+          description: Title, status and duration only
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [title, status, durationMinutes]
+                properties:
+                  title: { type: string }
+                  status: { $ref: '#/components/schemas/MeetingStatus' }
+                  durationMinutes: { type: integer }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/meetings/{id}/join:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Meetings]
+      summary: Join an open meeting using its secret invitation token
+      description: Idempotent for existing participants. Up to 100 participants. Does not grant workspace membership.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token]
+              properties:
+                token: { type: string, format: uuid }
+      responses:
+        '200': { description: Joined or already participating }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/meetings/{id}/availability:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Meetings]
+      summary: Replace current participant's availability in an open meeting
+      description: Intervals use UTC, must fit the meeting window and align with its 30-minute grid. Overlapping and adjacent intervals merge. Empty intervals is an explicit unavailable response. Updates personal timezone and meeting revision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [timezone, intervals]
+              properties:
+                timezone: { type: string, description: Valid IANA timezone }
+                intervals:
+                  type: array
+                  maxItems: 672
+                  items: { $ref: '#/components/schemas/AvailabilityInterval' }
+      responses:
+        '200': { description: Response saved }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/meetings/{id}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Meetings]
+      summary: Organizer confirms a full-duration time slot
+      description: Requires the current revision so concurrent answers or joins cannot silently change the selected result. Repeating the same confirmed start is idempotent. Queues notifications atomically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [start, revision]
+              properties:
+                start: { type: string, format: date-time }
+                revision: { type: integer, minimum: 0 }
+      responses:
+        '200': { description: Meeting scheduled }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/meetings/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Meetings]
+      summary: Organizer cancels an open or scheduled meeting
+      responses:
+        '200': { description: Cancelled or already cancelled; notifications queued }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
     sessionCookie:
@@ -393,6 +583,104 @@ components:
               error: { type: string }
               code: { type: string }
   schemas:
+    MeetingStatus:
+      type: string
+      enum: [OPEN, SCHEDULED, COMPLETED, CANCELLED]
+    AvailabilityInterval:
+      type: object
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time, description: 'Exclusive end, later than start' }
+    CreateMeeting:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, title, durationMinutes, windowStart, windowEnd, timezone]
+      properties:
+        idempotencyKey: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000, default: '' }
+        durationMinutes: { type: integer, minimum: 30, maximum: 480, multipleOf: 30 }
+        windowStart: { type: string, format: date-time }
+        windowEnd:
+          {
+            type: string,
+            format: date-time,
+            description: 'After windowStart, up to 14 calendar days',
+          }
+        timezone: { type: string, description: Valid IANA timezone }
+        chatId: { type: [string, 'null'], format: uuid, default: null }
+        actionId: { type: [string, 'null'], format: uuid, default: null }
+    MeetingSummary:
+      type: object
+      required:
+        [
+          id,
+          title,
+          status,
+          durationMinutes,
+          windowStart,
+          windowEnd,
+          timezone,
+          organizerId,
+          scheduledStart,
+          participantCount,
+          respondedCount,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/MeetingStatus' }
+        durationMinutes: { type: integer }
+        windowStart: { type: string, format: date-time }
+        windowEnd: { type: string, format: date-time }
+        timezone: { type: string }
+        organizerId: { type: string, format: uuid }
+        scheduledStart: { type: [string, 'null'], format: date-time }
+        participantCount: { type: integer }
+        respondedCount: { type: integer }
+    MeetingDetail:
+      allOf:
+        - $ref: '#/components/schemas/MeetingSummary'
+        - type: object
+          required: [description, revision, inviteUrl, participants, myIntervals, slots, action]
+          properties:
+            description: { type: string }
+            revision: { type: integer }
+            inviteUrl: { type: string }
+            participants:
+              type: array
+              items:
+                type: object
+                required: [id, firstName, lastName, timezone, respondedAt]
+                properties:
+                  id: { type: string, format: uuid }
+                  firstName: { type: string }
+                  lastName: { type: [string, 'null'] }
+                  timezone: { type: [string, 'null'] }
+                  respondedAt: { type: [string, 'null'], format: date-time }
+            myIntervals:
+              type: array
+              items: { $ref: '#/components/schemas/AvailabilityInterval' }
+            slots:
+              type: array
+              maxItems: 12
+              items:
+                type: object
+                required: [start, end, availableUserIds]
+                properties:
+                  start: { type: string, format: date-time }
+                  end: { type: string, format: date-time }
+                  availableUserIds:
+                    type: array
+                    items: { type: string, format: uuid }
+            action:
+              type: [object, 'null']
+              required: [id, title]
+              properties:
+                id: { type: string, format: uuid }
+                title: { type: string }
     ServiceInfo:
       type: object
       required: [name, status, version]

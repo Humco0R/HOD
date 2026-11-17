@@ -5,8 +5,9 @@ const routeFiles = [
   'apps/backend/src/app.ts',
   'apps/backend/src/transport/http/health.routes.ts',
   'apps/backend/src/transport/http/miniapp-api.routes.ts',
+  'apps/backend/src/transport/http/meetings-api.routes.ts',
 ];
-const routePattern = /\bapp\.(get|post|patch|delete)\(\s*['"]([^'"]+)['"]/g;
+const routePattern = /\bapp\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]/g;
 const implementation = new Set();
 
 for (const file of routeFiles) {
@@ -26,7 +27,7 @@ for (const line of openapi.split(/\r?\n/)) {
     currentPath = path[1];
     continue;
   }
-  const method = /^ {4}(get|post|patch|delete):\s*$/.exec(line);
+  const method = /^ {4}(get|post|put|patch|delete):\s*$/.exec(line);
   if (currentPath && method) specification.add(`${method[1].toUpperCase()} ${currentPath}`);
 }
 
