@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export * from './meetings';
+
 export const serviceInfoSchema = z.object({
   name: z.literal('ХОД'),
   status: z.literal('bootstrap'),

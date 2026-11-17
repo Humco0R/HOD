@@ -41,6 +41,7 @@ import {
 import { BullMqNotificationPublisher } from '../../modules/notifications';
 import { DrizzlePersonalWorkspaceStore } from '../../modules/personal';
 import { miniAppSessionCookieOptions } from './miniapp-session-cookie';
+import { registerMeetingsApi } from './meetings-api.routes';
 import {
   BullMqDetectionMessaging,
   DrizzleDetectionManagementStore,
@@ -124,6 +125,14 @@ export function registerMiniAppApi(
     reply.setCookie(SESSION_COOKIE, token, miniAppSessionCookieOptions(config));
   };
 
+  registerMeetingsApi(app, {
+    database,
+    origin: config.MINIAPP_ORIGIN ?? 'http://localhost:8080',
+    ...(config.MAX_MINIAPP_BOT_NAME ? { botName: config.MAX_MINIAPP_BOT_NAME } : {}),
+    requireSession,
+    assertOrigin: (request) => assertMutationOrigin(request, config, app),
+  });
+
   app.post('/api/auth/max', async (request, reply) => {
     if (!config.MAX_BOT_TOKEN) {
       throw app.httpErrors.serviceUnavailable('MAX authentication is not configured');
@@ -134,6 +143,14 @@ export function registerMiniAppApi(
         now: new Date(),
         maxAgeSeconds: config.MAX_INIT_DATA_MAX_AGE_SECONDS,
       });
+      // Invite links also work for a new MAX user, before their first conversation with the bot.
+      if (!(await sessions.findActiveExternalUserId(identity.externalUserId))) {
+        await personalWorkspaces.bootstrap({
+          externalDialogId: null,
+          user: identity,
+          timezone: config.WORKSPACE_DEFAULT_TIMEZONE,
+        });
+      }
       const result = await sessions.create(identity);
       setSessionCookie(reply, result.token);
       return currentUserSchema.parse(

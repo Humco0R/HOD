@@ -7,6 +7,11 @@ import type {
   DetectionDetail,
   DetectionEdit,
   TransitionActionRequestDto,
+  CreateMeeting,
+  MeetingContext,
+  MeetingDetail,
+  MeetingSummary,
+  SaveAvailability,
 } from '@hod/contracts';
 
 declare global {
@@ -131,9 +136,32 @@ export async function confirmDetection(id: string) {
 }
 
 export function getStartRoute(): string | null {
-  const start = window.WebApp?.initDataUnsafe?.start_param;
+  const start =
+    window.WebApp?.initDataUnsafe?.start_param ??
+    new URLSearchParams(window.location.hash.replace(/^#/, '')).get('WebAppStartParam');
   if (!start) return null;
+  if (start === 'meetings') return '/meetings';
+  const meeting = /^meeting_([a-f0-9-]{36})(?:_([a-f0-9-]{36}))?$/.exec(start);
+  if (meeting) return `/meetings/${meeting[1]}${meeting[2] ? `?invite=${meeting[2]}` : ''}`;
   if (start.startsWith('action_')) return `/actions/${start.slice('action_'.length)}`;
   if (start.startsWith('detection_')) return `/detections/${start.slice('detection_'.length)}`;
   return null;
 }
+
+export const listMeetings = () => request<{ meetings: MeetingSummary[] }>('/api/meetings');
+export const getMeetingContext = () => request<MeetingContext>('/api/meetings/context');
+export const createMeeting = (body: CreateMeeting) =>
+  request<{ id: string }>('/api/meetings', { method: 'POST', ...json(body) });
+export const getMeeting = (id: string) => request<MeetingDetail>(`/api/meetings/${id}`);
+export const getMeetingInvitation = (id: string, token: string) =>
+  request<{ title: string; status: MeetingSummary['status']; durationMinutes: number }>(
+    `/api/meetings/${id}/invitation?token=${encodeURIComponent(token)}`,
+  );
+export const joinMeeting = (id: string, token: string) =>
+  request(`/api/meetings/${id}/join`, { method: 'POST', ...json({ token }) });
+export const saveMeetingAvailability = (id: string, body: SaveAvailability) =>
+  request(`/api/meetings/${id}/availability`, { method: 'PUT', ...json(body) });
+export const confirmMeeting = (id: string, start: string, revision: number) =>
+  request(`/api/meetings/${id}/confirm`, { method: 'POST', ...json({ start, revision }) });
+export const cancelMeeting = (id: string) =>
+  request(`/api/meetings/${id}/cancel`, { method: 'POST', ...json({}) });

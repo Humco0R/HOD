@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import {
+  Link,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
+import { CreateMeetingPage, MeetingDetailPage, MeetingListPage } from './meetings';
+import { ThemePicker } from './theme';
 
 import type {
   ActionDetail,
@@ -74,9 +85,12 @@ export function App() {
           <span className="brand-mark">ХОД</span>
           <span className="muted">Дела из переписки</span>
         </div>
-        <span className="avatar" aria-label={session.data.firstName}>
-          {session.data.firstName.slice(0, 1).toUpperCase()}
-        </span>
+        <div className="header-actions">
+          <ThemePicker />
+          <span className="avatar" aria-label={session.data.firstName}>
+            {session.data.firstName.slice(0, 1).toUpperCase()}
+          </span>
+        </div>
       </header>
       <main className="content">
         <Routes>
@@ -87,12 +101,16 @@ export function App() {
           <Route path="/actions/new" element={<CreateActionPage />} />
           <Route path="/actions/:id" element={<ActionDetailPage me={session.data} />} />
           <Route path="/detections/:id" element={<DetectionPage />} />
+          <Route path="/meetings" element={<MeetingListPage />} />
+          <Route path="/meetings/new" element={<CreateMeetingPage />} />
+          <Route path="/meetings/:id" element={<MeetingDetailPage userId={session.data.id} />} />
           <Route path="*" element={<StatusScreen title="Страница не найдена" />} />
         </Routes>
       </main>
       <nav className="bottom-nav" aria-label="Разделы">
         <NavLink to="/actions">Мои дела</NavLink>
         <NavLink to="/created">От меня</NavLink>
+        <NavLink to="/meetings">Встречи</NavLink>
       </nav>
     </div>
   );
@@ -248,10 +266,16 @@ function ActionListPage({ view, title }: { view: 'assigned' | 'created' | 'team'
 
 function CreateActionPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const meetingId = params.get('meeting');
   const client = useQueryClient();
   const [idempotencyKey] = useState(() => crypto.randomUUID());
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState(params.get('title')?.slice(0, 200) ?? '');
+  const [description, setDescription] = useState(
+    meetingId && /^[a-f0-9-]{36}$/.test(meetingId)
+      ? `По итогам встречи: ${window.location.origin}/meetings/${meetingId}`
+      : '',
+  );
   const [deadlineKind, setDeadlineKind] =
     useState<CreateActionRequestDto['deadlineKind']>('UNKNOWN');
   const [deadlineDate, setDeadlineDate] = useState('');
@@ -285,6 +309,11 @@ function CreateActionPage() {
       </Link>
       <p className="eyebrow">Личное дело</p>
       <h1>Создать дело</h1>
+      {meetingId && /^[a-f0-9-]{36}$/.test(meetingId) && (
+        <Link className="back-link" to={`/meetings/${meetingId}`}>
+          ← К исходной встрече
+        </Link>
+      )}
       <form className="editor stack" onSubmit={submit}>
         <label>
           Название
@@ -455,6 +484,9 @@ function ActionDetailPage({ me }: { me: CurrentUser }) {
       </div>
       <h1>{action.title}</h1>
       {action.description && <p>{action.description}</p>}
+      <Link className="create-link" to={`/meetings/new?action=${action.id}`}>
+        Обсудить на встрече
+      </Link>
       <dl className="facts">
         <div>
           <dt>Исполнитель</dt>

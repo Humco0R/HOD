@@ -74,10 +74,15 @@ export class ApplicationOutboxHandler implements OutboxEventHandler {
     private readonly actionContexts: ActionContextStore,
     private readonly actionNotifications: ActionLifecycleNotificationPort,
     private readonly reminderNotifications: ActionReminderNotificationPort,
+    private readonly meetingNotifications?: { handle(event: ClaimedOutboxEvent): Promise<void> },
   ) {}
 
   async handle(event: ClaimedOutboxEvent): Promise<void> {
     switch (event.topic) {
+      case 'MEETING_NOTIFICATION_REQUESTED':
+        if (!this.meetingNotifications) throw new Error('Meeting notifications are not configured');
+        await this.meetingNotifications.handle(event);
+        return;
       case 'DETECTION_PROPOSAL_REQUESTED':
         await this.detectionNotifications.publish(proposalSchema.parse(event.payload));
         return;

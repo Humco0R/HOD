@@ -39,6 +39,7 @@ import {
   type OutboundNotification,
 } from '../../modules/notifications';
 import { toSafeErrorLog } from '../../shared/logger';
+import { DrizzleMeetingStore } from '../../modules/meetings/infrastructure/drizzle-meeting.store';
 import type { Database } from '../db/client';
 import { closeRedis, createRedisConnection, type RedisConnection } from '../redis/redis';
 import type { ApplicationQueues } from './queues';
@@ -70,6 +71,11 @@ export function createApplicationWorkers(
   const detectionMessaging = new BullMqDetectionMessaging(notificationPublisher, pendingInbox);
   const actionContexts = new DrizzleActionContextStore(database);
   const outboxStore = new DrizzleOutboxStore(database);
+  const meetings = new DrizzleMeetingStore(
+    database,
+    config.MINIAPP_ORIGIN ?? 'http://localhost:8080',
+    config.MAX_MINIAPP_BOT_NAME,
+  );
   const outboxDispatcher = new DispatchOutboxUseCase(
     outboxStore,
     new ApplicationOutboxHandler(
@@ -77,6 +83,7 @@ export function createApplicationWorkers(
       actionContexts,
       new QueueActionLifecycleNotifications(notificationPublisher, pendingInbox),
       new QueueActionReminderNotifications(notificationPublisher),
+      { handle: (event) => meetings.publishNotice(event, notificationPublisher) },
     ),
   );
   const reminders = new ScheduleActionRemindersUseCase(new DrizzleActionReminderStore(database));
@@ -98,6 +105,7 @@ export function createApplicationWorkers(
     config.REMINDER_SCAN_INTERVAL_SECONDS * 1_000,
     async () => {
       await reminders.execute(new Date(), config.REMINDER_LEAD_MINUTES);
+      await meetings.scheduleReminders(new Date(), config.REMINDER_LEAD_MINUTES);
     },
     timers,
     recurringRuns,

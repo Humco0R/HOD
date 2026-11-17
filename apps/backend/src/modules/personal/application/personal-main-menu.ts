@@ -14,6 +14,7 @@ export function personalMainMenu(externalUserId: string): OutboundNotification {
 • переслать мне сообщение с задачей;
 • открыть «Мои дела», увидеть полученные и заданные задачи и отфильтровать их по беседе;
 • посмотреть исходный контекст в карточке дела.
+• собрать встречу и найти общее свободное время.
 
 Хочешь автоматизировать рабочую беседу?
 1. Добавь меня в групповой чат.
@@ -24,7 +25,8 @@ export function personalMainMenu(externalUserId: string): OutboundNotification {
     buttons: [
       { text: '➕ Создать дело', payload: 'hod:personal:create', row: 0 },
       { text: '📋 Мои дела', payload: 'hod:personal:actions', row: 1 },
-      { text: '❓ Как это работает?', payload: 'hod:personal:help', row: 2 },
+      { text: '📅 Встречи', startParam: 'meetings', row: 2 },
+      { text: '❓ Как это работает?', payload: 'hod:personal:help', row: 3 },
     ],
   };
 }
