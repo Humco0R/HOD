@@ -135,6 +135,9 @@ export const currentUserSchema = z.object({
   lastName: z.string().nullable(),
   externalUserId: z.string(),
 });
+export const authSessionSchema = currentUserSchema.extend({
+  sessionToken: z.string().min(43).max(128),
+});
 export const detectionEditSchema = z
   .object({
     title: z.string().trim().min(1).max(500),
@@ -181,5 +184,6 @@ export type TransitionActionRequestDto = z.infer<typeof transitionActionRequestS
 export type CreateActionRequestDto = z.infer<typeof createActionRequestSchema>;
 export type CreateActionResponseDto = z.infer<typeof createActionResponseSchema>;
 export type CurrentUser = z.infer<typeof currentUserSchema>;
+export type AuthSession = z.infer<typeof authSessionSchema>;
 export type DetectionEdit = z.infer<typeof detectionEditSchema>;
 export type DetectionDetail = z.infer<typeof detectionDetailSchema>;

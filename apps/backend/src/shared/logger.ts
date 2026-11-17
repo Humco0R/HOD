@@ -13,6 +13,8 @@ const sensitivePaths = [
   '*.GIGACHAT_CREDENTIALS',
   'accessToken',
   '*.accessToken',
+  'sessionToken',
+  '*.sessionToken',
   'authorization',
   '*.authorization',
   '*.initData',

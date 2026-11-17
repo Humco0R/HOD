@@ -77,6 +77,47 @@ afterAll(async () => {
 });
 
 describe('Mini App API', () => {
+  it('supports MAX Desktop without cookies and revokes bearer sessions on logout', async () => {
+    const seed = await seedScenario();
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/auth/max',
+      payload: { initData: signedInitData(602) },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.headers['cache-control']).toBe('no-store');
+    const token = login.json<{ sessionToken: string }>().sessionToken;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const headers = { authorization: `Bearer ${token}` };
+    const listed = await app.inject({ method: 'GET', url: '/api/actions', headers });
+    expect(listed.statusCode).toBe(200);
+    expect(
+      listed.json<{ actions: Array<{ id: string }> }>().actions.map((action) => action.id),
+    ).toContain(seed.actionId);
+    expect(
+      (await app.inject({ method: 'GET', url: `/api/actions/${seed.foreignActionId}`, headers }))
+        .statusCode,
+    ).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/meetings', headers })).statusCode).toBe(
+      200,
+    );
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/me',
+          headers: { authorization: 'Bearer invalid' },
+        })
+      ).statusCode,
+    ).toBe(401);
+    const logout = await app.inject({
+      method: 'DELETE',
+      url: '/api/auth/session',
+      headers: { ...headers, origin: 'https://miniapp.example.test' },
+    });
+    expect(logout.statusCode).toBe(204);
+    expect((await app.inject({ method: 'GET', url: '/api/me', headers })).statusCode).toBe(401);
+  });
   it('creates a local session without MAX init data in explicit development mode', async () => {
     await seedScenario();
 

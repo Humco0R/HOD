@@ -244,13 +244,14 @@ describe('Mini App', () => {
     renderWithClient(<App />, `/actions/${action.id}`);
 
     const preview = await screen.findByRole('img', { name: 'result.jpg' });
-    expect(preview).toHaveAttribute('src', detail.attachments[0]!.downloadUrl);
+    expect(preview).toHaveAttribute('src', 'blob:fixed');
+    expect(fetchAttachment).toHaveBeenCalledWith(detail.attachments[0]!.downloadUrl);
     expect(screen.getByRole('heading', { name: 'Комментарии' })).toBeInTheDocument();
     expect(screen.getByText('Работа выполнена, добавил подтверждение.')).toBeInTheDocument();
     expect(screen.getByText(/Комментарий исполнителя/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Открыть фото/ }));
     const viewer = screen.getByRole('dialog', { name: 'Просмотр result.jpg' });
-    expect(within(viewer).getByRole('img', { name: 'result.jpg' })).toBeInTheDocument();
+    expect(await within(viewer).findByRole('img', { name: 'result.jpg' })).toBeInTheDocument();
     fireEvent.click(within(viewer).getByRole('button', { name: 'Закрыть фото' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
@@ -258,7 +259,8 @@ describe('Mini App', () => {
     await waitFor(() =>
       expect(fetchAttachment).toHaveBeenCalledWith(detail.attachments[1]!.downloadUrl),
     );
-    expect(createObjectUrl).toHaveBeenCalledOnce();
+    await waitFor(() => expect(downloadedName).toBe('FIXED.txt'));
+    expect(createObjectUrl).toHaveBeenCalledTimes(3);
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:fixed');
     expect(downloadedName).toBe('FIXED.txt');
     expect(screen.queryByRole('region', { name: 'Действия с делом' })).not.toBeInTheDocument();
